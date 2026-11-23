@@ -165,7 +165,9 @@ Quando o usuário pedir (e com o Metricool autorizado em `/mcp`): puxe as métri
 python "$SKILL/ferramentas/desempenho.py" desempenho/metricool-AAAA-MM-DD.json
 ```
 
-Ele liga cada post ao short entregue de mesmo título e escreve `desempenho/relatorio.md` com views e retenção por tipo de momento e por faixa de duração, se a nota prevê o resultado, e os 5 melhores e piores. Use as conclusões nas próximas escolhas e proponha ajustes em `referencias/como-escolher.md`.
+Ao **agendar** um short no Metricool com um texto diferente do título entregue, acrescente esse texto em `"postado": ["..."]` no item do short em `hora-N/entrega.json`, para o `desempenho.py` reconhecer o post depois.
+
+Ele liga cada post ao short entregue pelo título (ou pelo `postado`), lista à parte os posts sem short correspondente e escreve `desempenho/relatorio.md` com views, retenção e "pulou em 3 s" (skip rate do Instagram, métrica IGRE30) por tipo de momento e por faixa de duração, se a nota prevê o resultado, e os 5 melhores e piores. Use as conclusões nas próximas escolhas e proponha ajustes em `referencias/como-escolher.md`.
 
 ## Esqueleto da tela (padrão aprovado)
 

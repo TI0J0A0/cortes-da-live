@@ -26,12 +26,16 @@ import comum  # noqa: E402
 CHAVES_TEXTO = ("titulo", "title", "text", "texto", "caption", "description", "content")
 CHAVES_VIEWS = ("visualizacoes", "views", "videoViews", "video_views", "plays", "impressions", "reach")
 CHAVES_RETENCAO = ("retencao", "averageViewPercentage", "retention", "avgViewPercentage", "average_view_percentage")
+CHAVES_SKIP = ("skip", "reelsSkipRate", "skipRate", "skip_rate")  # % que pulou nos 3 primeiros segundos (Instagram)
+NUMEROS = {"um": "1", "uma": "1", "dois": "2", "duas": "2", "tres": "3", "quatro": "4", "cinco": "5", "seis": "6",
+           "sete": "7", "oito": "8", "nove": "9", "dez": "10", "vi": "6"}
 
 
 def normal(t):
     t = unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode().lower()
     t = re.sub(r"#\w+", " ", t)
-    return re.sub(r"[^a-z0-9]+", " ", t).strip()
+    t = re.sub(r"[^a-z0-9]+", " ", t).strip()
+    return " ".join(NUMEROS.get(w, w) for w in t.split())  # "três dias" e "3 dias" viram a mesma coisa
 
 
 def primeiro(d, chaves):
@@ -61,7 +65,8 @@ def ler_posts(arquivos):
             texto = primeiro(p, CHAVES_TEXTO)
             if views is None or not texto:
                 continue
-            posts.append({"texto": str(texto), "views": views, "retencao": numero(primeiro(p, CHAVES_RETENCAO))})
+            posts.append({"texto": str(texto), "views": views, "retencao": numero(primeiro(p, CHAVES_RETENCAO)),
+                          "skip": numero(primeiro(p, CHAVES_SKIP))})
     return posts
 
 
@@ -80,15 +85,26 @@ def shorts_entregues(pasta_lives):
     return out
 
 
+def parecido(titulo, texto):
+    """0 a 1: o título dentro do texto do post (1), a parte das palavras do título presentes no começo do post,
+    ou a semelhança das letras; vale o maior."""
+    t = normal(titulo)
+    if not t:
+        return 0.0
+    if t in texto:
+        return 1.0
+    palavras = [w for w in t.split() if len(w) > 2]
+    inicio = set(texto.split()[:len(t.split()) + 12])
+    sobra = sum(w in inicio for w in palavras) / float(len(palavras)) if palavras else 0.0
+    return max(sobra, difflib.SequenceMatcher(None, t, texto[:len(t) + 20]).ratio())
+
+
 def ligar(post, shorts):
-    """O short cujo título aparece no texto do post (ou é muito parecido com ele)."""
+    """O short cujo título (ou texto que foi postado, campo "postado" do entrega.json) bate com o post."""
     texto = normal(post["texto"])
     melhor, nota = None, 0.0
     for s in shorts:
-        t = normal(s["titulo"])
-        if not t:
-            continue
-        r = 1.0 if t in texto else difflib.SequenceMatcher(None, t, texto[:len(t) + 20]).ratio()
+        r = max([parecido(s["titulo"], texto)] + [parecido(x, texto) for x in s.get("postado") or []])
         if r > nota:
             melhor, nota = s, r
     return melhor if nota >= 0.8 else None
@@ -112,12 +128,15 @@ def tipo_base(t):
 
 
 def tabela(titulo, grupos):
-    linhas = ["## %s" % titulo, "", "| grupo | shorts | views (mediana) | views (média) | retenção média |", "|---|---|---|---|---|"]
+    linhas = ["## %s" % titulo, "", "| grupo | shorts | views (mediana) | views (média) | retenção média | pulou em 3 s |",
+              "|---|---|---|---|---|---|"]
     for nome, itens in sorted(grupos.items(), key=lambda kv: -statistics.median([i["views"] for i in kv[1]])):
         vs = [i["views"] for i in itens]
         ret = [i["retencao"] for i in itens if i["retencao"] is not None]
-        linhas.append("| %s | %d | %.0f | %.0f | %s |" % (nome, len(itens), statistics.median(vs), statistics.mean(vs),
-                                                         ("%.0f%%" % statistics.mean(ret)) if ret else "-"))
+        skip = [i["skip"] for i in itens if i.get("skip") is not None]
+        linhas.append("| %s | %d | %.0f | %.0f | %s | %s |" % (nome, len(itens), statistics.median(vs), statistics.mean(vs),
+                                                              ("%.0f%%" % statistics.mean(ret)) if ret else "-",
+                                                              ("%.0f%%" % statistics.mean(skip)) if skip else "-"))
     return linhas + [""]
 
 
@@ -126,7 +145,8 @@ def relatorio(posts, shorts):
     for p in posts:
         s = ligar(p, shorts)
         if s:
-            ligados.append(dict(p, **{k: s.get(k) for k in ("titulo", "tipo", "duracao", "nota", "live")}))
+            ligados.append(dict(p, _post=p, **{k: s.get(k) for k in ("titulo", "tipo", "duracao", "nota", "live")}))
+    soltos = [p for p in posts if not any(p is l.get("_post") for l in ligados)]
     linhas = ["# Desempenho dos shorts", "", "%d posts lidos, %d ligados a shorts entregues." % (len(posts), len(ligados)), ""]
     if not ligados:
         return linhas + ["Nenhum post bateu com os títulos entregues: confira se o texto do post traz o título do short."], ligados
@@ -143,6 +163,13 @@ def relatorio(posts, shorts):
             linhas += ["## A nota prevê o resultado?", "",
                        "Nota 80+: mediana de %.0f views (%d shorts). Abaixo de 80: %.0f views (%d shorts)." % (
                            statistics.median(altas), len(altas), statistics.median(baixas), len(baixas)), ""]
+    if soltos:
+        # posts sem short correspondente (de lives que já saíram de lives/, ou postados à mão) ainda mostram o canal
+        linhas += ["## Posts sem short entregue correspondente", ""]
+        for p in sorted(soltos, key=lambda x: -x["views"])[:10]:
+            linhas.append("- %.0f views%s: %s" % (p["views"], (", pulou em 3 s: %.0f%%" % p["skip"]) if p.get("skip") is not None else "",
+                                                  p["texto"].splitlines()[0][:80]))
+        linhas.append("")
     linhas += ["## Os 5 melhores", ""]
     for i in sorted(ligados, key=lambda x: -x["views"])[:5]:
         linhas.append("- %.0f views: %s (%s, %s s)" % (i["views"], i["titulo"], i.get("tipo") or "?", i.get("duracao") or "?"))

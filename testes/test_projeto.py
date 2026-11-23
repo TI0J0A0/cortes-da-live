@@ -222,6 +222,21 @@ class TestMelhorias(unittest.TestCase):
         self.assertIn('| descoberta | 1 | 12000 |', '\n'.join(linhas))
         self.assertEqual(desempenho.faixa(38), '30–45 s')
 
+    def test_desempenho_liga_por_numero_e_texto_postado(self):
+        shorts = [{'titulo': 'Fui abduzido e sumi por três dias', 'tipo': 'história'},
+                  {'titulo': 'A Lúcia meteu uma chave de braço', 'tipo': 'reação', 'postado': ['A Lúcia meteu um mata leão!']}]
+        abduzido = {'texto': 'FUI ABDUZIDO E SUMI POR 3 DIAS! 🛸 A nave levou a gente', 'views': 1312, 'retencao': None, 'skip': 30.0}
+        lucia = {'texto': 'A Lúcia meteu um mata leão! 💀 kkkk #GTA6', 'views': 1452, 'retencao': None, 'skip': 21.1}
+        outro = {'texto': 'Post de outra live', 'views': 10, 'retencao': None, 'skip': 50.0}
+        self.assertEqual(desempenho.ligar(abduzido, shorts)['tipo'], 'história')
+        self.assertEqual(desempenho.ligar(lucia, shorts)['tipo'], 'reação')
+        self.assertIsNone(desempenho.ligar(outro, shorts))
+        linhas, ligados = desempenho.relatorio([abduzido, lucia, outro], shorts)
+        texto = '\n'.join(linhas)
+        self.assertEqual(len(ligados), 2)
+        self.assertIn('pulou em 3 s', texto)
+        self.assertIn('Post de outra live', texto)  # posts soltos aparecem à parte
+
     def test_pipeline_status_por_hora(self):
         with tempfile.TemporaryDirectory() as td:
             h = Path(td) / 'hora-2'

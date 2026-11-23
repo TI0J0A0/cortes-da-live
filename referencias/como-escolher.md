@@ -30,6 +30,16 @@ A live é a fonte da verdade. O objetivo é preservar **a experiência de jogar*
 7. **Interação com o chat que altera a gameplay**: desafio, trollagem, aposta dentro do jogo, decisão sugerida.
 8. **Opinião sobre o jogo**, somente quando ligada a um acontecimento mostrado na tela e com uma conclusão clara. Conversa isolada e trechos de podcast são prioridade baixa.
 
+## O que o público do canal mostrou (métricas do Metricool, nov/2026)
+
+Vale para **qualquer jogo**; os números são só referência, não regra:
+
+- **Especulação e debate sobre a história e os personagens** são o que mais viraliza. "Fulano tá escondendo algo de Ciclano?", "isso é traição?", "o que aconteceu aqui?" convidam o público a opinar. O maior short próprio do canal foi desse tipo: 68,8 mil views no Instagram, com o menor skip rate.
+- **Mistério, curiosidade e polêmica no título** ("X tá diferente?", "Tem Y no jogo?", aparição de celebridade ou de algo inesperado) seguram mais que títulos vagos. "Que cena foi essa?!" e "Não faz isso, Lúcia!" foram os piores, porque não dizem o que vai acontecer.
+- **O jogo do momento rende muito mais.** Lançamento ou jogo em alta, que o público está procurando, fez 3 a 5 vezes mais views que um jogo de nicho na mesma época. Num jogo de nicho, a régua de nota não muda, mas espere números menores e prefira os momentos que se entendem sem conhecer o jogo.
+- **Ninguém assiste 60 s.** O tempo médio assistido nos cortes de 50–70 s ficou em 8–20 s. Daí a meta de 25–45 s e o gancho nos 2 primeiros segundos.
+- Atualize esta seção quando o `desempenho.py` mostrar algo novo (`desempenho/relatorio.md`).
+
 ## Condições para um bom corte
 
 - **Ação compreensível nos 3 primeiros segundos:** comece no gatilho da jogada, susto ou conflito. Se precisar de contexto, acrescente de 3 a 8 segundos anteriores; não invente narração.
@@ -55,8 +65,8 @@ A live é a fonte da verdade. O objetivo é preservar **a experiência de jogar*
 
 ## Títulos, descrição e tags
 
-- **Título:** 4 a 9 palavras, preferencialmente até 45 caracteres. Contexto, curiosidade e tensão, sem revelar o resultado desnecessariamente. Exemplos de tom, **não aplicar sem evidência**: "Esse boss não me deu chance", "O clutch mais improvável da live", "Eu não esperava esse susto".
-- **Legenda do post:** frase curta, natural, com pergunta apenas quando fizer sentido.
+- **Título:** 4 a 9 palavras, preferencialmente até 45 caracteres. Contexto, curiosidade e tensão, sem revelar o resultado desnecessariamente. Diga **do que** se trata: uma pergunta ou mistério concreto ganha de uma exclamação vaga. Exemplos de tom, **não aplicar sem evidência**: "Esse boss não me deu chance", "O clutch mais improvável da live", "Esse personagem tá mentindo?".
+- **Legenda do post:** frase curta, natural, terminando numa pergunta que puxe opinião ("vocês acham que...?") quando o momento permitir debate.
 - **Hashtags:** 3 a 5, com o jogo correto e `#tiojoaoyt` quando o canal for TiojoaoYT. Nunca invente o nome de um jogo que não conste em `info.json`, `resumo.md` ou fala confirmada.
 - **Texto na tela:** 2 a 3 palavras por bloco, sem cobrir rosto, HUD ou ação decisiva.
 
