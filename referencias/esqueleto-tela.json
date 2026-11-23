@@ -1,0 +1,55 @@
+{
+  "_sobre": "Esqueleto da tela padrão dos Shorts (referencias/layout-esperado.webp). Medidas em px num vídeo 1080x1920. cortar.py lê este arquivo como padrão; estilo.json da live ainda pode sobrescrever cada valor.",
+  "tela": {"largura": 1080, "altura": 1920},
+  "camera": {
+    "_sobre": "Facecam em largura total no topo, crop proporcional em volta do rosto (sem esticar).",
+    "_proporcao": "Mesma proporção da webcam do OBS (1280x720 = 16:9). Com 'proporcao' definida, a altura é calculada: 1080 / 16 * 9 = 608. A câmera entra inteira, sem cortar as laterais (menos ampliação = mais nitidez).",
+    "y": 0,
+    "proporcao": "16:9",
+    "altura": 608
+  },
+  "fade": {
+    "_sobre": "Gradiente vertical: os últimos px do painel da câmera somem sobre a gameplay. Sem linha dura.",
+    "altura": 90
+  },
+  "gameplay": {
+    "_sobre": "Começa por baixo do fade e vai até o fim da tela (y = camera.altura - fade.altura).",
+    "ate_o_fim": true
+  },
+  "titulo": {
+    "_sobre": "Selo amarelo arredondado, centrado na emenda câmera/gameplay, até 2 linhas.",
+    "centro_y": 608,
+    "tamanho_fonte": 48,
+    "max_linhas": 2,
+    "margem_lateral": 100,
+    "cor_fundo": "#FFD60A",
+    "cor_texto": "#111111"
+  },
+  "legenda": {
+    "_sobre": "Palavra por palavra, 3 palavras por vez, branca com a palavra falada em amarelo e contorno preto.",
+    "centro_y": 1574,
+    "tamanho_fonte": 76,
+    "palavras": 3,
+    "cor": "#FFFFFF",
+    "cor_destaque": "#FFD60A",
+    "cor_contorno": "#000000"
+  },
+  "encerramento": {
+    "_sobre": "Nos últimos segundos: o vídeo desfoca, o card 'Venha assistir ao vivo' entra com fade + zoom leve, e tudo termina com fade out (referencias/encerramento-exemplo.png). Título e legenda somem durante o encerramento.",
+    "ativo": true,
+    "imagem": "encerramento-ao-vivo.png",
+    "segundos": 5,
+    "largura": 810,
+    "centro_y": 975,
+    "blur": 18,
+    "escurecer": 0.85,
+    "entrada": 0.6,
+    "zoom_de": 0.85,
+    "fade_saida": 0.6
+  },
+  "barra": {
+    "_sobre": "Barra de progresso fina no rodapé.",
+    "altura": 12,
+    "cor": "#FFD60A"
+  }
+}

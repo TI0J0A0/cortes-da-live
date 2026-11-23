@@ -1,0 +1,26 @@
+# Dados de cada live (áudio, transcrições, trechos e shorts): grandes e pessoais
+lives/
+Shorts prontos para postar/
+lives-achadas.json
+desempenho/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Claude Code: configuração local da máquina
+.claude/settings.local.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Referências com rostos (facecam, prints de outros canais): ficam só nesta máquina.
+# Continuam em referencias/ para o Claude consultar; o código não depende delas.
+referencias/layout-esperado.webp
+referencias/layout-facecam-fade-exemplo.png
+referencias/esqueleto-sobre-quadro.png
+referencias/encerramento-exemplo.png
+referencias/tiojoao_animado.mp4
