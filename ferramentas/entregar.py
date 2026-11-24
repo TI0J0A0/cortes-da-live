@@ -137,9 +137,12 @@ def escrever_leia_me(raiz, destino, info):
         horas.insert(0, raiz / "entrega.json")
     for arq in horas:
         e = comum.ler_json(arq, {}) or {}
-        shorts = e.get("shorts") or []
+        todos = e.get("shorts") or []
+        shorts = [s for s in todos if (destino / s.get("arquivo", "")).exists()]  # já postados e apagados saem da lista
         nome_h = arq.parent.name.replace("hora-", "Hora ") if arq.parent != raiz else "Live inteira"
-        linhas += ["=" * 60, "%s: %d shorts (entregue em %s)" % (nome_h, len(shorts), e.get("quando", "?")), "=" * 60]
+        fora = len(todos) - len(shorts)
+        linhas += ["=" * 60, "%s: %d shorts para postar%s" % (nome_h, len(shorts),
+                                                              (" (%d já foram pro Metricool)" % fora) if fora else ""), "=" * 60]
         for s in shorts:
             dur = float(s.get("duracao") or 0)
             total += dur
