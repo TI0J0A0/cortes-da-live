@@ -44,7 +44,7 @@ Para cada hora N, em ordem, assim que ela estiver transcrita:
 3. `python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --previa`: baixa os trechos e monta `trechos/NN-previa.jpg` (6 quadros do momento, com o horário da live), **sem renderizar**. Abra cada prévia: se a ação prometida no título não aparece, rebaixe ou troque o momento no `momentos.json` e rode o conferir de novo.
 4. `python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N"` (pode rodar em segundo plano enquanto você começa a ler as janelas da hora N+1). Os trechos da prévia são reaproveitados.
 5. Revise as folhas `-conferir.jpg` (seção 5). Refaça só o que falhar com `--so NN`.
-6. `python "$SKILL/ferramentas/entregar.py" "lives/<id>/hora-N"` → `Shorts prontos para postar/<id>/hora-N/` com os MP4, os `.txt` e um `LEIA-ME.txt`.
+6. `python "$SKILL/ferramentas/entregar.py" "lives/<id>/hora-N"` → `Shorts prontos para postar/<AAAA-MM-DD - Site - live de XhYY (id)>/Hora N - NN - Título.mp4`, com `textos/` e o `LEIA-ME.txt` da live.
 7. Avise o usuário: "Hora N entregue: X shorts em ..." com título, duração e nota de cada um. **Siga direto para a hora N+1**, sem esperar resposta.
 
 `pipeline.py`/`ouvir.py` mostram quantas horas a live tem. A última hora pode ser mais curta (ex.: 6h54 → hora 7 tem 54 min; meta proporcional, ~1 corte a cada 6 min). As horas compartilham o áudio, o chat e o volume baixados uma vez em `lives/<id>/`.
@@ -145,7 +145,19 @@ Entregue **por hora**, assim que cada hora ficar pronta:
 python "$SKILL/ferramentas/entregar.py" "lives/<id>/hora-N"
 ```
 
-Põe a versão mais recente de cada corte (a `-v3` ganha da `-v2`) em `Shorts prontos para postar/<id>/hora-N/` como **hard link** (o vídeo aparece nas duas pastas mas ocupa o disco uma vez só; em outro disco ele copia), sem o sufixo de versão, com o `.txt` de cada short e um `LEIA-ME.txt` da hora (título, duração, nota, motivo, legenda, hashtags). O `entrega.json` da hora guarda título, tipo, duração e nota de cada short (usado pelo `desempenho.py`). Reentregar a mesma hora substitui a entrega anterior. Depois de entregar, apaga de `shorts/` as versões superadas e os cortes descartados na revisão (`--manter-tudo` desliga a limpeza). A pasta `trechos/` fica, para refazer cortes sem baixar de novo. Informe ao usuário: hora, quantidade de shorts, pasta e, para cada short, título, duração, nota e motivo. Se a hora tiver menos de 8, explique que só esses atingiram os critérios. Ao final da live, um resumo geral (`pipeline.py status`). Não publique nada diretamente.
+Cada live tem **uma pasta só**, com nome legível e os vídeos soltos nela, já na ordem de postar:
+
+```text
+Shorts prontos para postar/
+  2026-11-24 - Twitch - live de 4h29 (v2938905930)/
+    Hora 1 - 01 - Entrei na mansão de um rapper.mp4
+    Hora 1 - 02 - O cachorro do rapper apareceu do nada.mp4
+    Hora 2 - 01 - ...
+    LEIA-ME.txt     título, legenda, hashtags, duração e nota de cada short, hora por hora
+    textos/         o .txt de cada short, com o mesmo nome do vídeo
+```
+
+O nome da pasta é escolhido na primeira entrega e guardado em `lives/<id>/pasta-entrega.txt`, para as horas seguintes caírem na mesma pasta. Os vídeos entram como **hard link** (aparecem nas duas pastas mas ocupam o disco uma vez só; em outro disco ele copia), na versão mais recente de cada corte (a `-v3` ganha da `-v2`). O `entrega.json` da hora guarda título, tipo, duração, nota, legenda e hashtags de cada short (usado pelo `LEIA-ME.txt` e pelo `desempenho.py`). Reentregar uma hora troca só os arquivos `Hora N - ...` dela. Depois de entregar, apaga de `shorts/` as versões superadas e os cortes descartados na revisão (`--manter-tudo` desliga a limpeza). A pasta `trechos/` fica, para refazer cortes sem baixar de novo. Informe ao usuário: hora, quantidade de shorts, pasta e, para cada short, título, duração, nota e motivo. Se a hora tiver menos de 8, explique que só esses atingiram os critérios. Ao final da live, um resumo geral (`pipeline.py status`). Não publique nada diretamente.
 
 ## 7. Limpar o disco
 

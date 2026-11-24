@@ -87,3 +87,10 @@ Não foram fornecidos os VODs/gravações originais da live. Logo, não foi poss
 - **`desempenho.py`:** cruza um JSON de posts do Metricool com os shorts entregues (por título) e escreve `desempenho/relatorio.md` por tipo e duração. O `entregar.py` agora guarda título, tipo, duração e nota de cada short no `entrega.json`; entregas antigas são lidas pelo `cortes.json`.
 - **`mediana_que_anda`** (volume e chat) com janelas deslizantes do NumPy: mesmo resultado do laço, bem mais rápida.
 - **Testes:** 18 passando (9 novos: chat, trava, mediana, palavras gravadas, padrões do conferir, limpar, desempenho, status, encoder).
+
+## 2026-11-24 — Entrega organizada: uma pasta legível por live
+
+- **Problema:** `Shorts prontos para postar/` tinha pastas com o ID da live (`v2938905930`, `cTh8ABhVRIw`), uma subpasta por hora e seis pastas `hora-N` soltas de uma entrega antiga. Não dava para achar os cortes.
+- **`entregar.py`:** cada live agora tem uma pasta só, `AAAA-MM-DD - Site - live de XhYY (id)`, com os vídeos soltos e nomeados `Hora N - NN - Título.mp4` (o título de verdade, com acento), os `.txt` em `textos/` e um `LEIA-ME.txt` da live inteira. O nome da pasta fica em `lives/<id>/pasta-entrega.txt`. O `entrega.json` passou a guardar legenda, hashtags e motivo.
+- **Migração:** os 185 shorts já entregues (5 lives) foram movidos, sem re-renderizar nem trocar versão, para a estrutura nova. O que sobrou da estrutura antiga (incluindo 30 cópias velhas da entrega de 20/11) foi para `_estrutura antiga (pode apagar)/`.
+- Teste novo: 20 testes passando.

@@ -254,5 +254,53 @@ class TestMelhorias(unittest.TestCase):
         self.assertIn('-qvbr_quality_level', cortar.parametros_gpu('h264_amf', cortar.ESTILO))
 
 
+class TestEntregaOrganizada(unittest.TestCase):
+    def _hora(self, raiz, h, titulos):
+        p = raiz / ('hora-%d' % h)
+        (p / 'shorts').mkdir(parents=True)
+        (p / 'info.json').write_text(json.dumps({'id': 'v123', 'site': 'TwitchVod', 'duracao': 9000, 'hora': h,
+                                                 'canal': 'tiojoaoyt', 'titulo': 'live', 'link': 'x'}), encoding='utf-8')
+        cortes, momentos = [], []
+        for n, t in enumerate(titulos, 1):
+            arq = '%02d-corte.mp4' % n
+            (p / 'shorts' / arq).write_bytes(b'v' * 10)
+            (p / 'shorts' / arq.replace('.mp4', '.txt')).write_text('TÍTULO\n%s\n' % t, encoding='utf-8')
+            cortes.append({'n': n, 'arquivo': arq, 'titulo': t, 'duracao': 30, 'nota': 70, 'inicio': '0:0%d:00' % n})
+            momentos.append({'n': n, 'manter': True, 'inicio_s': n * 60, 'titulo': t, 'tipo': 'humor',
+                             'legenda': 'leg', 'hashtags': ['#GTA6']})
+        (p / 'shorts' / 'cortes.json').write_text(json.dumps(cortes), encoding='utf-8')
+        (p / 'momentos-conferidos.json').write_text(json.dumps({'momentos': momentos}), encoding='utf-8')
+        return p
+
+    def test_uma_pasta_legivel_por_live(self):
+        with tempfile.TemporaryDirectory() as td:
+            raiz = Path(td) / 'lives' / 'v123'
+            h1 = self._hora(raiz, 1, ['A Lúcia tá mentindo?', 'Bug: o carro voou'])
+            h2 = self._hora(raiz, 2, ['O ET apareceu'])
+            destino = Path(td) / 'entrega'
+            for h in (h1, h2):
+                r = subprocess.run([sys.executable, str(PASTA_FERRAMENTAS / 'entregar.py'), str(h), '--destino', str(destino),
+                                    '--manter-tudo'], capture_output=True, text=True, encoding='utf-8')
+                self.assertEqual(r.returncode, 0, r.stderr)
+            pastas = [p for p in destino.iterdir() if p.is_dir()]
+            self.assertEqual(len(pastas), 1)  # as duas horas na mesma pasta da live
+            live = pastas[0]
+            self.assertRegex(live.name, r'^\d{4}-\d\d-\d\d - Twitch - live de 2h30 \(v123\)$')
+            self.assertEqual(sorted(p.name for p in live.glob('*.mp4')),
+                             ['Hora 1 - 01 - A Lúcia tá mentindo.mp4', 'Hora 1 - 02 - Bug o carro voou.mp4',
+                              'Hora 2 - 01 - O ET apareceu.mp4'])
+            self.assertTrue((live / 'textos' / 'Hora 2 - 01 - O ET apareceu.txt').exists())
+            leia = (live / 'LEIA-ME.txt').read_text(encoding='utf-8')
+            self.assertIn('Hora 1: 2 shorts', leia)
+            self.assertIn('Hora 2: 1 shorts', leia)
+            # reentregar a hora 1 com outra lista troca só os arquivos da hora 1
+            (h1 / 'shorts' / 'cortes.json').write_text(json.dumps([json.loads((h1 / 'shorts' / 'cortes.json').read_text(encoding='utf-8'))[0]]), encoding='utf-8')
+            subprocess.run([sys.executable, str(PASTA_FERRAMENTAS / 'entregar.py'), str(h1), '--destino', str(destino), '--manter-tudo'],
+                           capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(sorted(p.name for p in live.glob('*.mp4')),
+                             ['Hora 1 - 01 - A Lúcia tá mentindo.mp4', 'Hora 2 - 01 - O ET apareceu.mp4'])
+            self.assertEqual(entregar.titulo_de_arquivo('Que isso?! / "teste": ok.'), 'Que isso! teste ok')
+
+
 if __name__ == '__main__':
     unittest.main()

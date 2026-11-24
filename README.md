@@ -2,7 +2,7 @@
 
 Skill para o Claude Code que transforma lives da Twitch, YouTube e Kick (ou gravações originais do OBS) em **vários Shorts 9:16**: facecam em cima, gameplay embaixo, título, legenda palavra por palavra e card final "Venha assistir ao vivo".
 
-**Regra do projeto:** cerca de **10 cortes por hora de live**, de **25 a 45 s**, na melhor qualidade possível, processados **hora por hora** e entregues em `Shorts prontos para postar/<id>/hora-N/` assim que cada hora fica pronta, enquanto a próxima já está sendo transcrita. O fluxo completo está em [SKILL.md](SKILL.md) e os critérios editoriais em [referencias/como-escolher.md](referencias/como-escolher.md).
+**Regra do projeto:** cerca de **10 cortes por hora de live**, de **25 a 45 s**, na melhor qualidade possível, processados **hora por hora** e entregues em `Shorts prontos para postar/`, uma pasta por live (`2026-11-24 - Twitch - live de 4h29 (id)/Hora 1 - 01 - Título.mp4`), assim que cada hora fica pronta, enquanto a próxima já está sendo transcrita. O fluxo completo está em [SKILL.md](SKILL.md) e os critérios editoriais em [referencias/como-escolher.md](referencias/como-escolher.md).
 
 ## Como funciona
 
@@ -12,7 +12,7 @@ pipeline.py ouvir ──► hora-N/ transcrição (palavra por palavra), volume,
 conferir.py ──► momentos-conferidos.json (até 10, nota ≥ 65, 12–60 s, sem sobreposição)
 cortar.py --previa ──► trechos/NN-previa.jpg (confere a ação antes do render)
 cortar.py ──► shorts/NN-titulo.mp4 + .txt + -conferir.jpg
-entregar.py ──► Shorts prontos para postar/<id>/hora-N/
+entregar.py ──► Shorts prontos para postar/<data - site - duração (id)>/Hora N - NN - Título.mp4
 ```
 
 | Ferramenta | O que faz |
