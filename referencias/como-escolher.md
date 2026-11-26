@@ -48,6 +48,7 @@ Vale para **qualquer jogo**; os números são só referência, não regra:
 - **Gancho:** os 2 primeiros segundos precisam mostrar ou anunciar o que vai acontecer (a ação começando, o grito, o inimigo aparecendo). Nada de abrir com silêncio, menu ou "então, gente...".
 - **Sem repetição:** não entregue dois shorts quase idênticos. Se dois bons candidatos se sobrepõem, fique com o melhor.
 - **Identidade do canal:** expressões naturais do streamer, sem vozes artificiais, sem memes aleatórios ou hashtags inventadas.
+- **A legenda é só sua:** o corte se apoia na **sua** fala e reação. Momento que é basicamente cinemática ou diálogo de personagem (a fala do jogo sai da legenda) fica sem legenda e perde força: prefira o trecho logo depois, quando você reage, ou descarte. O `cortar.py --previa` avisa com ⚠️ quando o jogo domina a fala.
 - **Ação mostrada:** no conteúdo visual ambíguo, confirmar o vídeo. O transcript sozinho não identifica os acontecimentos do jogo.
 
 ## Nota de 0 a 100

@@ -94,3 +94,11 @@ Não foram fornecidos os VODs/gravações originais da live. Logo, não foi poss
 - **`entregar.py`:** cada live agora tem uma pasta só, `AAAA-MM-DD - Site - live de XhYY (id)`, com os vídeos soltos e nomeados `Hora N - NN - Título.mp4` (o título de verdade, com acento), os `.txt` em `textos/` e um `LEIA-ME.txt` da live inteira. O nome da pasta fica em `lives/<id>/pasta-entrega.txt`. O `entrega.json` passou a guardar legenda, hashtags e motivo.
 - **Migração:** os 185 shorts já entregues (5 lives) foram movidos, sem re-renderizar nem trocar versão, para a estrutura nova. O que sobrou da estrutura antiga (incluindo 30 cópias velhas da entrega de 20/11) foi para `_estrutura antiga (pode apagar)/`.
 - Teste novo: 20 testes passando.
+
+## 2026-11-26 — Regra: a legenda é só da fala do streamer
+
+- **Problema:** em cinemáticas e diálogos de personagem, a fala do jogo entrava na legenda como se fosse do streamer (o Whisper, com a língua fixa em português, traduz a fala em inglês dos NPCs).
+- **`cortar.py`:** mede o idioma de cada frase do corte no áudio (`comum.lingua_da_fala`, faster-whisper `small`) e tira da legenda e do `.txt` as frases que não estão em português. Mostra quantas frases saíram e um **⚠️ ALERTA** (na prévia e no render) quando mais da metade da fala do corte é do jogo; o `cortes.json` guarda `falas_do_jogo`, `fracao_jogo` e `alerta_jogo`. `--legenda-tudo` desliga.
+- **`ouvir.py --faixa-voz N`:** numa gravação do OBS com o microfone em faixa própria, transcreve e mede o volume só da voz (resolve também jogos dublados em português, onde o idioma não separa).
+- **Teste real:** no short "A Lúcia age como se fosse a criminosa" (cinemática), as 8 falas do jogo em inglês foram marcadas e as 7 do streamer mantidas; o corte daria ALERTA (59% da fala era do jogo).
+- Regra no `SKILL.md` (regra geral e revisão) e no `como-escolher.md`.

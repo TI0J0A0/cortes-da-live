@@ -302,5 +302,37 @@ class TestEntregaOrganizada(unittest.TestCase):
             self.assertEqual(entregar.titulo_de_arquivo('Que isso?! / "teste": ok.'), 'Que isso! teste ok')
 
 
+class TestLegendaSoDoStreamer(unittest.TestCase):
+    def test_fala_do_jogo_sai_da_legenda(self):
+        # áudio de mentira: 1 s de 'português' (valor 1) e 1 s de 'inglês' (valor 2), alternando
+        taxa = comum.TAXA
+        som = np.concatenate([np.full(taxa * 2, 1, np.int16), np.full(taxa * 3, 2, np.int16), np.full(taxa * 2, 1, np.int16)])
+        detector = lambda a: (('en', 0.9) if len(a) and a.mean() > 1.5 else ('pt', 0.95))
+        trechos = [(0.0, 2.0), (2.0, 5.0), (5.0, 7.0), (6.5, 7.0)]  # o último é curto demais para medir: fica
+        jogo = cortar.falas_do_jogo(trechos, som, 0.0, 'pt', detector=detector)
+        self.assertEqual(jogo, [(2.0, 5.0, 'en')])
+        palavras = [{'w': 'caraca', 's': 0.5, 'e': 1.0}, {'w': 'you', 's': 2.5, 'e': 3.0},
+                    {'w': 'guys', 's': 4.0, 'e': 4.5}, {'w': 'mano', 's': 5.5, 'e': 6.0}]
+        self.assertEqual([w['w'] for w in cortar.sem_falas_do_jogo(palavras, jogo)], ['caraca', 'mano'])
+        fracao, idiomas = cortar.resumo_jogo(trechos[:3], jogo)
+        self.assertAlmostEqual(fracao, 3 / 7.0)
+        self.assertEqual(idiomas, ['en'])
+        self.assertLess(fracao, cortar.ALERTA_JOGO)
+
+    def test_alerta_quando_o_jogo_domina(self):
+        jogo = [(0.0, 8.0, 'en')]
+        fracao, _ = cortar.resumo_jogo([(0.0, 8.0), (8.0, 10.0)], jogo)
+        self.assertGreaterEqual(fracao, cortar.ALERTA_JOGO)
+
+    def test_trechos_de_fala_relativos_ao_corte(self):
+        frases = [{'s': 98, 'e': 101, 't': 'a'}, {'s': 103, 'e': 120, 't': 'b'}, {'s': 130, 'e': 131, 't': 'fora'}]
+        self.assertEqual(cortar.trechos_de_fala(frases, 100.0, 110.0), [(0.0, 1.0), (3.0, 10.0)])
+
+    def test_mesmo_idioma_nunca_sai(self):
+        som = np.zeros(comum.TAXA * 3, np.int16)
+        self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0)], som, 0.0, 'pt', detector=lambda a: ('pt', 0.99)), [])
+        self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0)], som, 0.0, 'pt', detector=lambda a: ('en', 0.3)), [])  # incerto: fica
+
+
 if __name__ == '__main__':
     unittest.main()

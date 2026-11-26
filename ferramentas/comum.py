@@ -174,13 +174,16 @@ class Tempos:
         return self.dado[self._nome]
 
 
-def audio_em_blocos(arquivo, inicio=None, duracao=None, bloco=TAXA * 30):
-    """Decode any audio or video file to 16 kHz mono and yield it in pieces (numpy int16)."""
+def audio_em_blocos(arquivo, inicio=None, duracao=None, bloco=TAXA * 30, faixa=None):
+    """Decode any audio or video file to 16 kHz mono and yield it in pieces (numpy int16).
+    faixa: número da faixa de áudio (0, 1, 2...) numa gravação do OBS com várias faixas (ex.: só o microfone)."""
     import numpy as np
     cmd = [ffmpeg(), "-v", "error", "-nostdin"]
     if inicio is not None:
         cmd += ["-ss", "%.3f" % max(0.0, inicio)]
     cmd += ["-i", str(arquivo)]
+    if faixa is not None:
+        cmd += ["-map", "0:a:%d" % int(faixa)]
     if duracao is not None:
         cmd += ["-t", "%.3f" % duracao]
     cmd += ["-vn", "-ac", "1", "-ar", str(TAXA), "-f", "s16le", "-"]
@@ -196,13 +199,37 @@ def audio_em_blocos(arquivo, inicio=None, duracao=None, bloco=TAXA * 30):
         p.wait()
 
 
-def audio(arquivo, inicio=None, duracao=None):
+def audio(arquivo, inicio=None, duracao=None, faixa=None):
     import numpy as np
-    partes = list(audio_em_blocos(arquivo, inicio, duracao))
+    partes = list(audio_em_blocos(arquivo, inicio, duracao, faixa=faixa))
     return np.concatenate(partes) if partes else np.zeros(0, dtype=np.int16)
 
 
 _MOTOR = {}
+
+
+def modelo_whisper(nome):
+    """O faster-whisper carregado uma vez por execução (no processador)."""
+    from faster_whisper import WhisperModel
+    if nome not in _MOTOR:
+        # on the processor, always: a video card only works here with extra libraries that most computers do not have
+        _MOTOR[nome] = WhisperModel(nome, device="cpu", compute_type="int8", cpu_threads=max(4, (os.cpu_count() or 8) // 2))
+    return _MOTOR[nome]
+
+
+def lingua_da_fala(amostras, modelo=None):
+    """O idioma falado num pedaço de áudio (numpy int16 a 16 kHz): ("pt", 0.97), ("en", 0.88)...
+    Serve para separar a fala do streamer (português) do diálogo do jogo (inglês): o Whisper com língua fixa em
+    português TRADUZ a fala em inglês dos personagens, e ela vazaria na legenda. (None, 0.0) quando não dá para medir."""
+    import numpy as np
+    if amostras is None or len(amostras) < TAXA * 0.5 or motor() == "mlx":
+        return None, 0.0
+    try:
+        som = amostras.astype(np.float32) / 32768.0
+        lingua, prob, _ = modelo_whisper(modelo or os.environ.get("CORTES_MODELO_IDIOMA") or "small").detect_language(audio=som)
+        return lingua, float(prob)
+    except Exception:
+        return None, 0.0
 
 
 def modelo_padrao():
@@ -233,11 +260,7 @@ def transcrever(amostras, lingua=None, palavras=False, modelo=None):
         return segs, r.get("language") or lingua
     except ImportError:
         pass
-    from faster_whisper import WhisperModel
-    if modelo not in _MOTOR:
-        # on the processor, always: a video card only works here with extra libraries that most computers do not have
-        _MOTOR[modelo] = WhisperModel(modelo, device="cpu", compute_type="int8", cpu_threads=max(4, (os.cpu_count() or 8) // 2))
-    achados, info = _MOTOR[modelo].transcribe(som, language=lingua, word_timestamps=palavras,
+    achados, info = modelo_whisper(modelo).transcribe(som, language=lingua, word_timestamps=palavras,
                                               condition_on_previous_text=False, vad_filter=True)
     segs = []
     for s in achados:

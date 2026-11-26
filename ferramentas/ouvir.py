@@ -198,10 +198,10 @@ def tempos_de_json(texto):
     return out
 
 
-def volume_por_segundo(arq):
+def volume_por_segundo(arq, faixa=None):
     """The level of every second of the stream, in dB, counted on the stream's own clock (no second is skipped)."""
     niveis, resto = [], np.zeros(0, dtype=np.int16)
-    for pedaco in comum.audio_em_blocos(arq, bloco=comum.TAXA * 60):
+    for pedaco in comum.audio_em_blocos(arq, bloco=comum.TAXA * 60, faixa=faixa):
         junto = np.concatenate([resto, pedaco])
         n = len(junto) // comum.TAXA * comum.TAXA
         if n:
@@ -215,14 +215,14 @@ def volume_por_segundo(arq):
     return niveis
 
 
-def volume_da_live(arq, raiz):
+def volume_da_live(arq, raiz, faixa=None):
     """O volume de cada segundo da live inteira, guardado em lives/<id>/volume.json para as outras horas."""
     cache = raiz / "volume.json"
     with comum.Trava(raiz, "volume"):
         dado = comum.ler_json(cache)
         if dado and dado.get("audio") == arq.name and dado.get("tamanho") == arq.stat().st_size:
             return dado["volume"]
-        niveis = volume_por_segundo(arq)
+        niveis = volume_por_segundo(arq, faixa)
         comum.escrever_json(cache, {"audio": arq.name, "tamanho": arq.stat().st_size, "volume": niveis})
         return niveis
 
@@ -272,9 +272,17 @@ def main():
                     help="processa só a hora N da live (1, 2, 3...) em lives/<id>/hora-N/; áudio e chat são baixados uma vez")
     ap.add_argument("--duracao-hora", type=int, default=3600, help="segundos de cada bloco no modo --hora")
     ap.add_argument("--sobra", type=int, default=60, help="segundos lidos além do fim da hora, só para fechar contexto")
+    ap.add_argument("--faixa-voz", type=int, default=-1,
+                    help="gravação do OBS com várias faixas: número da faixa só do microfone (0, 1, 2...). "
+                         "Assim a transcrição e a legenda nunca pegam o áudio do jogo")
     a = ap.parse_args()
 
     info, raiz = baixar_info(a.link, a.pasta, a.cookies, a.canal)
+    if a.faixa_voz >= 0:
+        if not info.get("arquivo_local"):
+            sys.exit("--faixa-voz só funciona com a gravação original do OBS (arquivo local com várias faixas de áudio).")
+        info["faixa_voz"] = a.faixa_voz
+        comum.escrever_json(raiz / "info.json", info)
     print("Live: %s | %s | %s" % (info["canal"], info["titulo"], comum.duracao_falada(info["duracao"] or 0)))
     if info.get("duracao"):
         print("Horas na live: %d (use --hora 1, --hora 2, ...)" % int(np.ceil(info["duracao"] / float(a.duracao_hora))))
@@ -316,7 +324,7 @@ def main():
     if feito and feito.get("completa"):
         segs, lingua = feito["frases"], feito["lingua"]
         if feito.get("versao", 0) < 2:  # an older run counted the seconds per block and drifted
-            feito.update({"volume": volume_da_live(arq, raiz), "versao": 2})
+            feito.update({"volume": volume_da_live(arq, raiz, info.get("faixa_voz")), "versao": 2})
             comum.escrever_json(destino / "transcricao.json", feito)
         volume = np.array(feito["volume"])
         levou = tempos.dado.get("ouvir", 0)  # a second run keeps the time the real listening took
@@ -328,10 +336,10 @@ def main():
         andado = 0  # samples already handed to Whisper
         if a.hora:
             total = min(total, fim_h + a.sobra) if total else fim_h + a.sobra
-            fonte = comum.audio_em_blocos(arq, inicio=ini_h, duracao=fim_h + a.sobra - ini_h)
+            fonte = comum.audio_em_blocos(arq, inicio=ini_h, duracao=fim_h + a.sobra - ini_h, faixa=info.get("faixa_voz"))
             print("    hora %d: transcrevendo %s a %s" % (a.hora, comum.relogio(ini_h), comum.relogio(total)), flush=True)
         else:
-            fonte = comum.audio_em_blocos(arq)
+            fonte = comum.audio_em_blocos(arq, faixa=info.get("faixa_voz"))
         acabou = False
         while not acabou or len(fila):
             while not acabou and len(fila) < (BLOCO + FOLGA) * comum.TAXA:
@@ -360,7 +368,7 @@ def main():
                                        for w in s.get("p", []) if w["w"]]})
             andado += len(pedaco)
             print("    ouvido até %s%s" % (comum.relogio(ini_h + andado / comum.TAXA), " de " + comum.relogio(total) if total else ""), flush=True)
-        niveis = volume_da_live(arq, raiz)
+        niveis = volume_da_live(arq, raiz, info.get("faixa_voz"))
         volume = np.array(niveis)
         comum.escrever_json(destino / "transcricao.json", {"completa": True, "versao": 3, "palavras": True, "lingua": lingua,
                                                            "modelo": a.modelo or comum.modelo_padrao(), "frases": segs,

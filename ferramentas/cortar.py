@@ -1074,6 +1074,46 @@ def folha_previa(quadros, t_live, cada, destino, n=6):
     gravar_jpg(destino, np.vstack(linhas), 85)
 
 
+ALERTA_JOGO = 0.5  # fração da fala do corte que é diálogo do jogo a partir da qual o corte ganha um ALERTA
+
+
+def trechos_de_fala(frases, ini, fim):
+    """[(s, e)] de cada frase da transcrição dentro do corte, em segundos desde o começo do corte."""
+    return [(round(max(f["s"], ini) - ini, 2), round(min(f["e"], fim) - ini, 2))
+            for f in frases if f["e"] > ini and f["s"] < fim and min(f["e"], fim) - max(f["s"], ini) > 0.05]
+
+
+def falas_do_jogo(trechos, som, t0, lingua, detector=None):
+    """Quais trechos de fala do corte NÃO são do streamer: diálogo de personagem, cinemática, rádio do jogo.
+    Mede o idioma de cada frase no áudio; o streamer fala `lingua` (português) e o jogo fala outra (inglês).
+    trechos: [(s, e)] desde o começo do corte; som: áudio do trecho baixado (16 kHz), onde o corte começa em t0.
+    Devolve [(s, e, idioma)] dos trechos do jogo."""
+    detector = detector or comum.lingua_da_fala
+    lingua = (lingua or "pt")[:2]
+    jogo = []
+    for s, e in trechos:
+        if e - s < 0.8:  # curto demais para medir o idioma com segurança: fica (na dúvida, é do streamer)
+            continue
+        a, b = int((t0 + s) * comum.TAXA), int((t0 + e) * comum.TAXA)
+        idioma, prob = detector(som[max(0, a):max(0, b)])
+        if idioma and idioma[:2] != lingua and prob >= 0.5:
+            jogo.append((s, e, idioma))
+    return jogo
+
+
+def sem_falas_do_jogo(palavras, jogo):
+    """As palavras da legenda sem as que caem num trecho de fala do jogo."""
+    if not jogo:
+        return palavras
+    return [w for w in palavras if not any(s <= (w["s"] + w["e"]) / 2.0 < e for s, e, _ in jogo)]
+
+
+def resumo_jogo(trechos, jogo):
+    """(fração da fala que é do jogo, idiomas) para o aviso e o ALERTA."""
+    total = sum(e - s for s, e in trechos) or 1.0
+    return sum(e - s for s, e, _ in jogo) / total, sorted({i for _, _, i in jogo})
+
+
 def palavras_gravadas(frases, ini, fim):
     """As palavras com tempo próprio que o ouvir.py já guardou (transcrição versão 3), relativas a `ini`.
     None quando a transcrição é antiga e não tem palavra por palavra."""
@@ -1152,6 +1192,8 @@ def main():
                     help="transcreve cada trecho de novo para a legenda (padrão: usa as palavras já gravadas pelo ouvir.py)")
     ap.add_argument("--previa", action="store_true",
                     help="só baixa os trechos e monta trechos/NN-previa.jpg (6 quadros do momento) para conferir antes do render")
+    ap.add_argument("--legenda-tudo", action="store_true",
+                    help="NÃO tira o diálogo do jogo da legenda (padrão: a legenda é só da fala do streamer)")
     ap.add_argument("--gpu", action="store_true", help="codifica na placa de vídeo (AMD AMF, NVIDIA NVENC ou Intel QSV), bem mais rápido")
     a = ap.parse_args()
     global FPS
@@ -1216,7 +1258,18 @@ def main():
         folha_previa(quadros, m["inicio_s"], cada, trechos / ("%02d-previa.jpg" % n))
         pls = planos(quadros, achados, a.modo, forcada, cada)
         del quadros
-        prontos.append({"m": m, "trecho": trecho, "t0": t0, "dur": dur, "som": som, "pls": pls})
+        # REGRA: a legenda é só da fala do streamer. Diálogo de personagem/cinemática do jogo sai da legenda.
+        falas = trechos_de_fala(frases_live, m["inicio_s"], m["fim_s"])
+        jogo = [] if (a.legenda_tudo or info.get("faixa_voz") is not None) else falas_do_jogo(falas, som, t0, lingua)
+        fracao, idiomas = resumo_jogo(falas, jogo)
+        if jogo:
+            print("    legenda: %d frase(s) do jogo (%s) fora da legenda, %.0f%% da fala do corte"
+                  % (len(jogo), "/".join(idiomas), fracao * 100), flush=True)
+        if fracao >= ALERTA_JOGO:
+            print("    ⚠️  ALERTA: a maior parte da fala deste corte é DIÁLOGO DO JOGO, não sua. Confira se o momento se "
+                  "sustenta só com a sua reação; senão, troque o momento.", flush=True)
+        prontos.append({"m": m, "trecho": trecho, "t0": t0, "dur": dur, "som": som, "pls": pls,
+                        "jogo": jogo, "fracao_jogo": fracao})
     com_camera = [s["pl"]["camera"] for p in prontos for s in p["pls"] if s["pl"]["modo"] == "facecam"]
     if com_camera and not forcada and not a.modo:
         # a webcam não muda de lugar na live: as horas anteriores ajudam a achar a câmera inteira
@@ -1236,7 +1289,8 @@ def main():
     if a.previa:
         print("\nPrévia pronta (nada foi renderizado). Abra cada uma e confira se a ação prometida aparece:")
         for p in prontos:
-            print("  %s  %s" % (trechos / ("%02d-previa.jpg" % p["m"]["n"]), p["m"].get("titulo", "")))
+            print("  %s  %s%s" % (trechos / ("%02d-previa.jpg" % p["m"]["n"]), p["m"].get("titulo", ""),
+                                  "   ⚠️ fala é mais do jogo que sua" if p["fracao_jogo"] >= ALERTA_JOGO else ""))
         print("Depois rode o cortar.py sem --previa (os trechos já baixados são reaproveitados).")
         return
     # second pass: the words and the clip
@@ -1252,12 +1306,18 @@ def main():
             segs, _ = comum.transcrever(p["som"][a0:a0 + int(p["dur"] * comum.TAXA)], lingua=lingua, palavras=True)
             palavras = juntar_numeros([w for s in segs for w in s.get("p", [])])
             reserva = palavras_da_transcricao(frases_live, m["inicio_s"], m["fim_s"])
+            if not a.legenda_tudo and info.get("faixa_voz") is None:  # as frases desta transcrição são outras: mede de novo
+                p["jogo"] = falas_do_jogo([(s["s"], s["e"]) for s in segs], p["som"], p["t0"], lingua)
         if len(reserva) >= 8 and len(palavras) < 0.4 * len(reserva):
             # o Whisper do trecho perdeu a fala (às vezes só pega o NPC): usa a transcrição da hora,
             # com as palavras distribuídas dentro do tempo de cada frase
             print("    legenda: a transcrição do trecho veio com %d palavras e a da hora tem %d; usando a da hora"
                   % (len(palavras), len(reserva)), flush=True)
             palavras = reserva
+        antes = len(palavras)
+        palavras = sem_falas_do_jogo(palavras, p["jogo"])  # REGRA: só a fala do streamer vai para a legenda
+        if antes != len(palavras):
+            print("    legenda: %d palavra(s) do diálogo do jogo removidas" % (antes - len(palavras)), flush=True)
         grupos = grupos_de_legenda(palavras, estilo)
         coment = comentarios(pasta, n, lingua, estilo)
         base = "%02d-%s" % (n, nome_de_arquivo(m.get("titulo", "")))
@@ -1289,7 +1349,9 @@ def main():
         total_s = p["dur"] + sum(c["dur"] for c in coment.values())
         feitos = [f for f in feitos if f["arquivo"] != saida.name]
         feitos.append({"n": n, "arquivo": saida.name, "comentario": sorted(coment), "titulo": m.get("titulo", ""), "inicio": m["inicio"], "fim": m["fim"],
-                       "duracao": round(total_s, 1), "modo": modos, "nota": m.get("nota"), "link": link})
+                       "duracao": round(total_s, 1), "modo": modos, "nota": m.get("nota"), "link": link,
+                       "falas_do_jogo": len(p["jogo"]), "fracao_jogo": round(p["fracao_jogo"], 2),
+                       "alerta_jogo": p["fracao_jogo"] >= ALERTA_JOGO})
         print("    corte pronto: %s (%.0f s, %s, %d palavras%s)" % (saida.name, total_s, modos, len(palavras),
               ", com o seu comentário " + " e ".join("antes" if x == "abre" else "depois" for x in sorted(coment)) if coment else ""), flush=True)
     comum.escrever_json(cortes / "cortes.json", sorted(feitos, key=lambda f: f["n"]))

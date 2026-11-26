@@ -19,11 +19,12 @@ description: >
 ## ⚠️ REGRA GERAL (vale para TODA live, sem precisar pedir)
 
 1. **Cerca de 10 cortes por hora de live.** Meta de 10 por hora (aceitável de 8 a 12). Uma live de 5 h rende ~50 shorts. **Nunca invente cortes fracos para bater a meta:** se uma hora só tiver 6 momentos bons, entregue 6 e diga por quê.
-2. **Shorts curtos e com gancho.** Mire em **25 a 45 s**; o `conferir.py` avisa acima de 45 s e rejeita acima de 60 s. Comece no gatilho (a ação nos 2 primeiros segundos) e termine logo depois da reação.
-3. **Melhor qualidade possível.** Fonte original do OBS quando existir; senão, o link (o `cortar.py` baixa a melhor resolução até 4K, maior fps e maior bitrate). Render H.264 `crf 16`/`slow`, áudio 256 kbps. Nada de recomprimir trechos à toa.
-4. **Separado por hora.** Cada hora vira uma pasta própria: `lives/<id>/hora-1/`, `hora-2/`, `hora-3/`... (análise, cortes e entrega independentes).
-5. **Ordem: hora 1 → hora 2 → hora 3 → ...** Comece SEMPRE pela primeira hora.
-6. **Entregar enquanto processa a próxima.** Assim que a hora N estiver cortada e revisada, entregue (`entregar.py`) e avise o usuário com a lista dos shorts. Enquanto você analisa/corta a hora N, a transcrição das próximas horas já está rodando em segundo plano. O usuário recebe vídeos desde a primeira hora, sem esperar a live inteira.
+2. **⚠️ LEGENDA SÓ COM A FALA DO STREAMER.** Diálogo de personagem, cinemática, rádio e NPC do jogo **nunca** entram na legenda, nem no "O QUE É DITO" do `.txt`. O `cortar.py` mede o idioma de cada frase no áudio e tira da legenda o que não é português, porque o jogo fala inglês e o Whisper com língua fixa em português *traduz* essa fala e ela vazaria como se fosse sua. Quando mais da metade da fala de um corte é do jogo, ele mostra **⚠️ ALERTA** (na prévia e no render): nesse caso, confira se o momento se sustenta só com a sua reação ou troque o momento. Na revisão (seção 5), toda legenda que mostrar fala de personagem é defeito: refaça com `--so NN`.
+3. **Shorts curtos e com gancho.** Mire em **25 a 45 s**; o `conferir.py` avisa acima de 45 s e rejeita acima de 60 s. Comece no gatilho (a ação nos 2 primeiros segundos) e termine logo depois da reação.
+4. **Melhor qualidade possível.** Fonte original do OBS quando existir; senão, o link (o `cortar.py` baixa a melhor resolução até 4K, maior fps e maior bitrate). Render H.264 `crf 16`/`slow`, áudio 256 kbps. Nada de recomprimir trechos à toa.
+5. **Separado por hora.** Cada hora vira uma pasta própria: `lives/<id>/hora-1/`, `hora-2/`, `hora-3/`... (análise, cortes e entrega independentes).
+6. **Ordem: hora 1 → hora 2 → hora 3 → ...** Comece SEMPRE pela primeira hora.
+7. **Entregar enquanto processa a próxima.** Assim que a hora N estiver cortada e revisada, entregue (`entregar.py`) e avise o usuário com a lista dos shorts. Enquanto você analisa/corta a hora N, a transcrição das próximas horas já está rodando em segundo plano. O usuário recebe vídeos desde a primeira hora, sem esperar a live inteira.
 
 ### Pipeline por hora (como executar a regra)
 
@@ -107,6 +108,7 @@ O programa:
 - baixa/copia apenas os trechos aprovados, preservando a melhor fonte disponível (até 4K/2160p por padrão, maior fps e bitrate); **não recodifica os trechos só para forçar keyframes**;
 - procura a facecam e usa a câmera inteira na proporção da webcam (veja "Esqueleto da tela");
 - usa as palavras com tempo já gravadas pelo `ouvir.py` na legenda (sem rodar o Whisper de novo); em transcrições antigas, ou com `--whisper-trecho`, transcreve o trecho;
+- **tira da legenda a fala do jogo**: mede o idioma de cada frase (modelo `small`, ~1 s por frase) e remove as que não são em português, mostrando `legenda: N frase(s) do jogo (en) fora da legenda` e o **⚠️ ALERTA** quando o jogo domina a fala. `--legenda-tudo` desliga (só para jogo dublado em que você fale junto). **Jogo dublado em português:** o idioma não separa; grave no OBS com o microfone numa faixa própria e rode `ouvir.py ... --faixa-voz N` (N = número da faixa do microfone, 0, 1, 2...), que transcreve só a sua voz;
 - quando há um layout gamer estável, usa FFmpeg para composição/legendas mais rápida; em trocas complexas de cena e comentários, usa o método compatível;
 - exporta MP4 vertical H.264/AAC **1080 × 1920**, título, descrição, hashtags e folha de 6 quadros;
 - grava tudo em **`lives/<id>/hora-N/shorts/`** (`.mp4`, `.txt`, `-conferir.jpg` e `cortes.json`). Reedições recebem sufixos `-v2`, `-v3` em vez de apagar os MP4 anteriores.
@@ -131,7 +133,7 @@ A fonte original do OBS é preferível. **Zoom limitado preserva nitidez relativ
 
 ## 5. Revisão obrigatória
 
-Abra cada `shorts/NN-...-conferir.jpg`. Veja: rosto não esticado, câmera correta e legível, ação presente, HUD relevante visível, começo antes do evento, final depois da reação, texto sem encobrir a jogada, legenda sincronizada. Se precisar, veja os MP4 completos.
+Abra cada `shorts/NN-...-conferir.jpg`. Veja: rosto não esticado, câmera correta e legível, ação presente, HUD relevante visível, começo antes do evento, final depois da reação, texto sem encobrir a jogada, legenda sincronizada e **só com a sua fala** (nada de fala de personagem ou cinemática na legenda amarela/branca; a legenda do próprio jogo, pequena embaixo, é do jogo e pode aparecer). Corte com **⚠️ ALERTA** de fala do jogo precisa de atenção redobrada. Se precisar, veja os MP4 completos.
 
 Se um corte falhar, corrija `momentos.json`, rode `conferir.py` e reexporte **só ele** usando `--so NN`. Se um trecho manualmente alterado mudar de início/fim, o cache será invalidado.
 
