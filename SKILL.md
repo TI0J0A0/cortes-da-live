@@ -81,7 +81,7 @@ Se um hook avisar que o link **já foi processado**, avise o usuário e pergunte
 
 1. Leia `referencias/como-escolher.md` e `referencias/layout-facecam-fade.md` com atenção. **Não use critérios de podcast** e respeite a referência visual. Se existir `desempenho/relatorio.md`, leia também: ele diz que tipos e durações performam no canal.
 2. Leia `resumo.md` e `pistas-gamer.json`. São orientações para encontrar passagens, não prova de eventos visuais.
-3. Leia **todas** as `janelas/janela-XX.md` em ordem. Para cada janela de 12 minutos, registre 0 a 4 candidatos, se existirem.
+3. Leia **todas** as `janelas/janela-XX.md` em ordem. Para cada janela de 12 minutos, registre 0 a 4 candidatos, se existirem. Linhas marcadas `JOGO |` são fala do jogo (personagem/cinemática em inglês): **não são do streamer**, não entram na legenda e não sustentam um corte sozinhas. O `conferir.py` dá ⚠️ ALERTA quando mais da metade da fala de um momento é do jogo.
 4. Dê destaque a clutch/ace, sustos, boss fights, erros e reviravoltas, descoberta, lore e momentos hilários ligados à partida. Guarde a progressão completa: contexto curto → acontecimento → reação. Evite diálogos longos e frases descontextualizadas.
 5. Monte `momentos.json` no formato do guia, com todos os candidatos de nota ≥60. Não invente falas ou acontecimentos a partir de palavras soltas.
 
@@ -121,6 +121,8 @@ O programa:
 python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --gpu
 # gameplay mais fluida (aumenta custo de processamento):
 python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --fps 60
+# enquadramento da gameplay de UM momento (ex.: o celular do GTA fica na borda direita e sai cortado):
+#   no momentos.json, no momento: "enquadrar": "direita"  (ou "esquerda", "centro", ou 0 a 1 = centro do corte)
 # câmera manual (coordenadas da imagem de origem; confira trechos/NN-quadro.jpg):
 python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --so 3 --camera 35,38,430,245
 # se a detecção automática falhar:
@@ -161,17 +163,33 @@ Shorts prontos para postar/
 
 O nome da pasta é escolhido na primeira entrega e guardado em `lives/<id>/pasta-entrega.txt`, para as horas seguintes caírem na mesma pasta. Os vídeos entram como **hard link** (aparecem nas duas pastas mas ocupam o disco uma vez só; em outro disco ele copia), na versão mais recente de cada corte (a `-v3` ganha da `-v2`). O `entrega.json` da hora guarda título, tipo, duração, nota, legenda e hashtags de cada short (usado pelo `LEIA-ME.txt` e pelo `desempenho.py`). Reentregar uma hora troca só os arquivos `Hora N - ...` dela. Depois de entregar, apaga de `shorts/` as versões superadas e os cortes descartados na revisão (`--manter-tudo` desliga a limpeza). A pasta `trechos/` fica, para refazer cortes sem baixar de novo. Informe ao usuário: hora, quantidade de shorts, pasta e, para cada short, título, duração, nota e motivo. Se a hora tiver menos de 8, explique que só esses atingiram os critérios. Ao final da live, um resumo geral (`pipeline.py status`). Não publique nada diretamente.
 
-## 7. Limpar o disco
+## 7. Agendar no Metricool e limpar
+
+Quando o usuário pedir para agendar shorts (o Metricool é acessado pelo conector MCP; marca, padrão de texto e horários na memória do projeto):
 
 ```bash
-python "$SKILL/ferramentas/limpar.py"                    # só lista (nada é apagado)
-python "$SKILL/ferramentas/limpar.py" --dias 7 --apagar  # apaga trechos/ das horas entregues há 7+ dias
-python "$SKILL/ferramentas/limpar.py" --audio --apagar   # inclui o audio.* das lives com todas as horas entregues
+# 1. salve a agenda atual (getScheduledPosts, em períodos curtos por causa do limite de tamanho) em agenda.json e planeje:
+python "$SKILL/ferramentas/agendar.py" planejar "Shorts prontos para postar/<pasta da live>" --shorts "Hora 2 - 02" "Hora 5 - 03" --agenda agenda.json --de 2026-11-26 --ate 2026-11-27
+# 2. mande cada post de plano-agendamento.json para o createScheduledPost (Instagram REEL, TikTok, YouTube short, GAMING,
+#    madeForKids false, comentário fixado do plano)
+# 3. depois de agendados: registra o texto postado, apaga vídeo e texto da pasta de entrega e refaz o LEIA-ME
+python "$SKILL/ferramentas/agendar.py" concluir plano-agendamento.json
 ```
 
-Nunca apaga shorts, transcrições, momentos nem a gravação original do OBS. **Só rode com `--apagar` quando o usuário pedir.**
+O `planejar` escolhe os horários livres no padrão do canal (10h, 16h, 18h, extras 13h e 21h; se o dia estiver cheio, 12h, 20h, 19h, 15h; no mínimo 1 h entre posts), sobe os vídeos no litterbox (72 h; o Metricool copia o vídeo na hora do agendamento) e monta texto, títulos do YouTube/TikTok, tags e comentário fixado. Respeite horários e datas que o usuário pedir (`--de/--ate`).
+
+**Limpeza** (o usuário quer a pasta de entrega só com o que falta postar e sem arquivos de trabalho):
+
+```bash
+python "$SKILL/ferramentas/limpar.py" --agendados agenda.json --trabalho            # só lista
+python "$SKILL/ferramentas/limpar.py" --agendados agenda.json --trabalho --apagar   # apaga
+```
+
+`--agendados` apaga os shorts entregues que já estão no Metricool (mesmo título ou texto registrado em `postado`, e post criado depois da entrega daquela hora, para um título repetido de outra live não apagar o short errado). `--trabalho` deixa em `lives/<id>/` só `info.json`, `pasta-entrega.txt` e os `hora-N/info.json` e `entrega.json`, apagando trechos, áudio, transcrições e versões, e só em lives com todas as horas entregues. `--sem-entrega` inclui lives nunca entregues. No Windows/OneDrive, as pastas vazias que o Python não remove saem pelo PowerShell. Rode com `--apagar` quando o usuário pedir ou já tiver autorizado a limpeza depois de agendar.
 
 ## 8. Aprender com o desempenho (Metricool)
+
+Uma tarefa agendada (`relatorio-semanal-shorts`, toda segunda às 9h, com o app aberto) puxa as métricas da semana, roda o `desempenho.py` e atualiza a seção "O que o público do canal mostrou" do `como-escolher.md` quando houver conclusão nova. Também dá para fazer na hora:
 
 Quando o usuário pedir (e com o Metricool autorizado em `/mcp`): puxe as métricas dos posts de Shorts pelo MCP do Metricool, salve a lista de posts em `desempenho/metricool-AAAA-MM-DD.json` e rode:
 

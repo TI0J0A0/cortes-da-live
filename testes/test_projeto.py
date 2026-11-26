@@ -200,11 +200,15 @@ class TestMelhorias(unittest.TestCase):
             (raiz / 'hora-1' / 'trechos' / '01.mp4').write_bytes(b'x' * 100)
             (raiz / 'audio.mp4').write_bytes(b'a' * 50)
             (raiz / 'info.json').write_text(json.dumps({'duracao': 3000}), encoding='utf-8')
+            (raiz / 'hora-1' / 'info.json').write_text('{}', encoding='utf-8')
             (raiz / 'hora-1' / 'entrega.json').write_text(json.dumps({'quando': '2020-01-01 10:00:00'}), encoding='utf-8')
-            lista = limpar.candidatos(Path(td) / 'lives', 7, True)
+            em_corte = Path(td) / 'lives' / 'v2'  # live ainda sem entrega: não é tocada
+            (em_corte / 'hora-1').mkdir(parents=True)
+            (em_corte / 'audio.mp4').write_bytes(b'a')
+            lista = limpar.candidatos_trabalho(Path(td) / 'lives')
             self.assertEqual(sorted(p.name for p, _, _ in lista), ['audio.mp4', 'trechos'])
             self.assertTrue((raiz / 'hora-1' / 'trechos' / '01.mp4').exists())  # listar não apaga
-            self.assertEqual(limpar.candidatos(Path(td) / 'lives', 99999, True), [])
+            self.assertIn('v2', [p.name for p, _, _ in limpar.candidatos_trabalho(Path(td) / 'lives', sem_entrega=True)])
 
     def test_desempenho_liga_posts_aos_shorts(self):
         shorts = [{'titulo': 'Achei um laboratório de caranguejo mutante', 'tipo': 'descoberta / reação', 'duracao': 38, 'nota': 85},
@@ -332,6 +336,60 @@ class TestLegendaSoDoStreamer(unittest.TestCase):
         som = np.zeros(comum.TAXA * 3, np.int16)
         self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0)], som, 0.0, 'pt', detector=lambda a: ('pt', 0.99)), [])
         self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0)], som, 0.0, 'pt', detector=lambda a: ('en', 0.3)), [])  # incerto: fica
+
+
+class TestMelhorias2(unittest.TestCase):
+    def test_texto_em_ingles_e_fala_do_jogo(self):
+        for t in ['This is scary. You guys are in a world', 'Thank you for telling us.', 'What can I get you?']:
+            self.assertTrue(comum.parece_fala_do_jogo(t), t)
+        for t in ['Caraca, Lucia. Para de tratar o maluco', 'Okay, bebê', 'Mano, isso é scooter, boss', 'Oh my']:
+            self.assertFalse(comum.parece_fala_do_jogo(t), t)
+
+    def test_enquadrar_a_gameplay(self):
+        self.assertEqual(cortar.posicao_do_jogo('direita', 100, 600, 1920), 1320)
+        self.assertEqual(cortar.posicao_do_jogo('esquerda', 100, 600, 1920), 0)
+        self.assertEqual(cortar.posicao_do_jogo(None, 100, 600, 1920), 100)
+        self.assertEqual(cortar.posicao_do_jogo(0.5, 100, 600, 1920), 660)
+        cam = {'modo': 'facecam', 'camera': [20, 20, 300, 180], 'rosto': [80, 30, 100, 100]}
+        jx_dir = cortar.recortes(cam, 1920, 1080, dict(cortar.ESTILO, enquadrar='direita'))['jogo'][0]
+        jw = cortar.recortes(cam, 1920, 1080, cortar.ESTILO)['jogo'][2]
+        self.assertEqual(jx_dir, 1920 - jw)
+
+    def test_agendar_horarios_livres_e_texto(self):
+        import datetime as dt
+        import agendar
+        dia = dt.date.today() + dt.timedelta(days=3)
+        tomados = [dt.datetime.combine(dia, dt.time(10)), dt.datetime.combine(dia, dt.time(16, 30))]
+        livres = agendar.horarios_livres(tomados, dia, dia, 3)
+        self.assertEqual([h.hour for h in livres], [13, 18, 21])  # 16h fica a 30 min de um post: pula
+        post = agendar.montar_post({'titulo': 'Fui dormir e acordei numa nave', 'tipo': 'mistério / reação',
+                                    'legenda': 'O que aconteceu?', 'hashtags': ['#GTA6', '#OVNI', '#TiojoaoYT']},
+                                   'Hora 3 - 01 - x.mp4', livres[0], 'https://x/v.mp4')
+        self.assertTrue(post['texto'].startswith('FUI DORMIR E ACORDEI NUMA NAVE! 👽'))
+        self.assertEqual(post['titulo_youtube'], 'FUI DORMIR E ACORDEI NUMA NAVE! 👽 | GTA 6 #Shorts')
+        self.assertIn('Lives TODOS OS DIAS', post['comentario_fixado'])
+
+    def test_limpar_agendados_respeita_data_da_entrega(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            destino = base / 'entrega' / 'live'
+            (destino / 'textos').mkdir(parents=True)
+            video = destino / 'Hora 1 - 01 - A Lucia tá traindo o Jason.mp4'
+            video.write_bytes(b'v')
+            (destino / 'textos' / (video.stem + '.txt')).write_text('t', encoding='utf-8')
+            h = base / 'lives' / 'v1' / 'hora-1'
+            h.mkdir(parents=True)
+            (h / 'info.json').write_text('{}', encoding='utf-8')
+            (h / 'entrega.json').write_text(json.dumps({'quando': '2026-11-24 02:00:00', 'destino': str(destino),
+                                                        'shorts': [{'arquivo': video.name, 'titulo': 'A Lucia tá traindo o Jason'}]}),
+                                            encoding='utf-8')
+            antigo = [{'creationDate': {'dateTime': '2026-11-21T00:38:00'}, 'text': 'A LUCIA TÁ TRAINDO O JASON?! 👀'}]
+            novo = [{'creationDate': {'dateTime': '2026-11-25T10:00:00'}, 'text': 'A LUCIA TÁ TRAINDO O JASON?! 👀',
+                     'youtubeData': {'title': 'A LUCIA TÁ TRAINDO O JASON?! 👀 | GTA 6 #Shorts'}}]
+            self.assertEqual(limpar.candidatos_agendados(antigo, base / 'lives'), [])  # post de outra live, mais antigo
+            achados = limpar.candidatos_agendados(novo, base / 'lives')
+            self.assertEqual(sorted(p.suffix for p, _, _ in achados), ['.mp4', '.txt'])
+            self.assertTrue(video.exists())  # listar não apaga
 
 
 if __name__ == '__main__':

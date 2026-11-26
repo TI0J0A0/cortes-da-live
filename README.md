@@ -23,7 +23,8 @@ entregar.py ──► Shorts prontos para postar/<data - site - duração (id)>/
 | `conferir.py` | encaixa os momentos nas frases e escolhe os melhores sem sobreposição |
 | `cortar.py` | baixa os trechos, acha a facecam, monta e codifica os Shorts (`--previa`, `--gpu`) |
 | `entregar.py` | põe a versão final de cada short na pasta de entrega (hard link, sem duplicar no disco) |
-| `limpar.py` | libera espaço apagando trechos de horas já entregues (só lista sem `--apagar`) |
+| `agendar.py` | `planejar`: horários livres, upload e textos no padrão do canal para o Metricool; `concluir`: registra e tira da pasta o que foi agendado |
+| `limpar.py` | apaga os shorts que já estão no Metricool e os arquivos de trabalho das lives entregues (só lista sem `--apagar`) |
 | `desempenho.py` | cruza as métricas do Metricool com os shorts entregues (por tipo e duração) |
 | `esqueleto.py` | desenha a tela padrão (wireframe ou sobre um quadro real) |
 | `achar.py` | procura lives gravadas de um assunto no YouTube |

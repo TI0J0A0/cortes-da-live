@@ -422,6 +422,8 @@ def main():
 
     # the transcript in windows, with the marks on the lines
     def marca(s, e, fala=""):
+        if comum.parece_fala_do_jogo(fala):  # diálogo do jogo em inglês: nunca é a reação do streamer
+            return "JOGO | "
         m = ""
         g = [x for x in gritos if x["s"] <= e and x["e"] >= s]
         if g:
@@ -444,7 +446,9 @@ def main():
         ini, fim = ini_h + i * passo, min(ini_h + (i + 1) * passo, fim_r)
         linhas = ["# Janela %d de %d: %s a %s" % (i + 1, n, comum.relogio(ini), comum.relogio(fim)),
                   "%s | %s" % (info["canal"], info["titulo"]), "",
-                  "ALTO = volume acima do normal; CHAT = pico de mensagens; GAME? = pista da FALA, confirme no vídeo.", ""]
+                  "ALTO = volume acima do normal; CHAT = pico de mensagens; GAME? = pista da FALA, confirme no vídeo.",
+                  "JOGO = fala do jogo (personagem/cinemática em inglês): não é sua e não entra na legenda; "
+                  "não escolha momento que seja só isso.", ""]
         for s in segs:
             if ini <= s["s"] < fim:
                 if fim_h and s["s"] >= fim_h and not any(x.startswith("--- SOBRA") for x in linhas):
@@ -465,6 +469,7 @@ def main():
               "- Chat: %s" % ("%d mensagens, %d picos" % (mensagens, len(picos)) if picos or mensagens >= 200 else "sem replay"),
               "- Janelas para ler: %d (pasta janelas/)" % n,
               "- Pistas gamer na fala: %d (pistas-gamer.json; não garantem acontecimentos visuais)" % len(pistas),
+              "- Linhas que parecem fala do jogo (JOGO nas janelas): %d" % sum(comum.parece_fala_do_jogo(x["t"]) for x in segs),
               "", "## Pistas gamer (verificar na gameplay)", ""]
     # Distribua pistas ao longo da live; evita 30 marcações consecutivas do mesmo acontecimento.
     vistos_pista = set()

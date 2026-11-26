@@ -60,6 +60,13 @@ def main():
             avisos.append("longo demais (%.0f s): corte o que não precisa" % dur)
         elif dur > 45:
             avisos.append("longo (%.0f s): dá para começar mais perto do gatilho ou terminar logo após a reação?" % dur)
+        # REGRA: a legenda é só do streamer; o diálogo do jogo sai dela. Corte que é quase só fala do jogo fica fraco.
+        do_jogo = [f for f in dentro if comum.parece_fala_do_jogo(f["t"])]
+        fala_total = sum(f["e"] - f["s"] for f in dentro) or 1.0
+        if sum(f["e"] - f["s"] for f in do_jogo) / fala_total >= 0.5:
+            avisos.append("⚠️ ALERTA: mais da metade da fala é do JOGO (personagem/cinemática), não sua; "
+                          "a legenda fica quase vazia. Reveja o momento")
+        dentro = [f for f in dentro if f not in do_jogo]  # o texto mostrado é só a sua fala
         texto = " ".join(f["t"] for f in dentro)
         primeira = texto.lower().lstrip("¿¡ ")
         if any(primeira.startswith(x) for x in MULETAS):

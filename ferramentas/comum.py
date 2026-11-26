@@ -2,6 +2,7 @@
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -107,6 +108,22 @@ def duracao_falada(s):
     if m:
         return "%d min %02d s" % (m, seg)
     return "%d s" % seg
+
+
+# Palavras muito comuns em inglês que quase não existem no português falado (sem "a", "no", "do", "me", "se"...).
+INGLES = set("""the you i i'm you're it's that's don't can't won't what this that it is are was were be been have has
+get got just know want need gonna wanna yeah okay ok oh hey guys man dude bro fuck fucking shit damn with for of on at
+they he she we my your our his her their them him us here there now why how where who when will would could should
+right look come go going let's please thank thanks sorry wait stop help really something nothing everything""".split())
+
+
+def parece_fala_do_jogo(texto, minimo=3, fracao=0.4):
+    """True quando a frase parece diálogo do jogo em inglês (personagem, cinemática, rádio), não fala do streamer.
+    Pista barata, só pelo texto: o turbo costuma escrever a fala do jogo em inglês. Frases curtas ficam de fora."""
+    palavras = re.findall(r"[a-zA-Z']+", str(texto or "").lower())
+    if len(palavras) < minimo:
+        return False
+    return sum(p in INGLES for p in palavras) / float(len(palavras)) >= fracao
 
 
 def ler_json(p, padrao=None):

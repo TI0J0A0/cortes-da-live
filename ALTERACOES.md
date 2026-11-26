@@ -102,3 +102,12 @@ Não foram fornecidos os VODs/gravações originais da live. Logo, não foi poss
 - **`ouvir.py --faixa-voz N`:** numa gravação do OBS com o microfone em faixa própria, transcreve e mede o volume só da voz (resolve também jogos dublados em português, onde o idioma não separa).
 - **Teste real:** no short "A Lúcia age como se fosse a criminosa" (cinemática), as 8 falas do jogo em inglês foram marcadas e as 7 do streamer mantidas; o corte daria ALERTA (59% da fala era do jogo).
 - Regra no `SKILL.md` (regra geral e revisão) e no `como-escolher.md`.
+
+## 2026-11-26 — Fala do jogo nas janelas, agendamento, limpeza oficial, enquadramento e relatório semanal
+
+- **Fala do jogo já na transcrição:** `comum.parece_fala_do_jogo` reconhece frase em inglês pelo texto (o turbo escreve a fala do jogo em inglês). As janelas marcam essas linhas com `JOGO |`, o resumo conta quantas são, o `conferir.py` dá ⚠️ ALERTA quando mais da metade da fala do momento é do jogo e mostra só a fala do streamer, e o `cortar.py` usa essa pista junto com a detecção pelo áudio.
+- **`agendar.py` (novo):** `planejar` escolhe horários livres no padrão do canal a partir da agenda do Metricool, sobe os vídeos e monta texto, títulos, tags e comentário fixado; `concluir` registra o texto postado no `entrega.json`, apaga o vídeo e o texto da pasta de entrega e refaz o LEIA-ME.
+- **`limpar.py` reescrito:** `--agendados agenda.json` (shorts que já estão no Metricool, com trava pela data de criação do post contra títulos repetidos de outras lives) e `--trabalho` (deixa só os metadados das lives entregues); pastas vazias que o OneDrive trava saem pelo PowerShell. Substitui o script temporário da limpeza de 24/11.
+- **Enquadramento por momento:** `"enquadrar": "direita" | "esquerda" | "centro" | 0..1` no `momentos.json` desloca o corte da gameplay só naquele short (ex.: o celular do GTA na borda direita).
+- **Relatório semanal:** tarefa agendada `relatorio-semanal-shorts` (segundas, 9h) puxa as métricas do Metricool, roda o `desempenho.py` e atualiza o `como-escolher.md` quando houver conclusão nova.
+- 28 testes passando.

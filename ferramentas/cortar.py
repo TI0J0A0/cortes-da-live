@@ -520,6 +520,24 @@ def caixa_dominante(caixas):
     return max(candidatas, key=lambda c: (sum(dentro(o, c) for o in caixas), c[2] * c[3]))
 
 
+def posicao_do_jogo(enquadrar, jx, jw, W):
+    """Onde cortar a gameplay na horizontal. enquadrar (por momento, no momentos.json): "direita" (ex.: o celular do
+    GTA, que fica na borda direita da tela), "esquerda", "centro" ou um número de 0 a 1 (centro do corte em fração da
+    largura). Sem enquadrar, fica o automático (`jx`)."""
+    if enquadrar in (None, "", "auto"):
+        return jx
+    if enquadrar == "direita":
+        return W - jw
+    if enquadrar == "esquerda":
+        return 0
+    if enquadrar == "centro":
+        return (W - jw) // 2
+    try:
+        return int(float(enquadrar) * W - jw / 2.0)
+    except (TypeError, ValueError):
+        return jx
+
+
 def recortes(pl, W, H, estilo=None):
     """Crops + positions. Gamer fills a small top panel without enlarging the webcam to 1080."""
     estilo = estilo or ESTILO
@@ -552,6 +570,7 @@ def recortes(pl, W, H, estilo=None):
         if x < jx + jw and x + w > jx:
             esquerda, direita = max(0, x - jw), min(W - jw, x + w)
             jx = direita if (x + w / 2) < W / 2 else esquerda
+        jx = posicao_do_jogo(estilo.get("enquadrar"), jx, jw, W)
         jx = max(0, min(W - jw, jx))
         return {"fade": fade, "topo": cam + (0, 0, L, painel),
                 "jogo": (jx, jy, jw, jh, 0, painel - fade, L, alt_jogo),
@@ -1261,6 +1280,11 @@ def main():
         # REGRA: a legenda é só da fala do streamer. Diálogo de personagem/cinemática do jogo sai da legenda.
         falas = trechos_de_fala(frases_live, m["inicio_s"], m["fim_s"])
         jogo = [] if (a.legenda_tudo or info.get("faixa_voz") is not None) else falas_do_jogo(falas, som, t0, lingua)
+        if not a.legenda_tudo and info.get("faixa_voz") is None:  # reforço pelo texto: frase escrita em inglês é do jogo
+            ja = {(s, e) for s, e, _ in jogo}
+            jogo += [(s, e, "en") for (s, e), f in zip(falas, [f for f in frases_live if f["e"] > m["inicio_s"] and f["s"] < m["fim_s"]
+                                                              and min(f["e"], m["fim_s"]) - max(f["s"], m["inicio_s"]) > 0.05])
+                     if (s, e) not in ja and comum.parece_fala_do_jogo(f["t"])]
         fracao, idiomas = resumo_jogo(falas, jogo)
         if jogo:
             print("    legenda: %d frase(s) do jogo (%s) fora da legenda, %.0f%% da fala do corte"
@@ -1332,11 +1356,13 @@ def main():
         saida = cortes / (base + ".mp4")
         modos = " + ".join(dict.fromkeys(s["pl"]["modo"] for s in p["pls"]))
         folha = cortes / (base + "-conferir.jpg")
+        # enquadramento da gameplay só deste momento (ex.: "enquadrar": "direita" quando o celular do jogo aparece)
+        estilo_corte = dict(estilo, enquadrar=m["enquadrar"]) if m.get("enquadrar") else estilo
         ok = False
         if not coment:
-            ok = montar_rapido(p["trecho"], p["t0"], p["dur"], p["pls"], grupos, m.get("titulo", ""), estilo, saida, folha)
+            ok = montar_rapido(p["trecho"], p["t0"], p["dur"], p["pls"], grupos, m.get("titulo", ""), estilo_corte, saida, folha)
         if not ok:
-            ok = montar(p["trecho"], p["t0"], p["dur"], p["pls"], grupos, m.get("titulo", ""), estilo, saida, folha, coment)
+            ok = montar(p["trecho"], p["t0"], p["dur"], p["pls"], grupos, m.get("titulo", ""), estilo_corte, saida, folha, coment)
         if not ok:
             sys.exit("O ffmpeg não fechou o corte %d." % n)
         link = ("%s (início: %s)" % (info["link"], m["inicio"])) if info.get("arquivo_local") else (
