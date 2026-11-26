@@ -203,7 +203,7 @@ Ele liga cada post ao short entregue pelo título (ou pelo `postado`), lista à 
 
 ## Esqueleto da tela (padrão aprovado)
 
-A tela padrão está em `referencias/esqueleto-tela.json` (referência: `referencias/layout-esperado.webp`): facecam em largura total no topo **na mesma proporção da webcam do OBS (1280x720 = 16:9 → 0–608 px, `"proporcao": "16:9"`), câmera inteira sem cortar laterais**, fade de 90 px sobre a gameplay (gameplay de 518 px até o fim), selo amarelo do título centrado na emenda (y=608), legenda Arial Bold palavra por palavra em y=1574 e barra de progresso de 12 px no rodapé. O fade **já está implementado** nos dois renderizadores. `cortar.py` lê esse arquivo como padrão; mude a tela ali, não no código.
+A tela padrão está em `referencias/esqueleto-tela.json` (referência: `referencias/layout-esperado.webp`): facecam em largura total no topo **na mesma proporção da webcam do OBS (1280x720 = 16:9 → 0–608 px, `"proporcao": "16:9"`), câmera inteira sem cortar laterais**, fade de 90 px sobre a gameplay (gameplay de 518 px até o fim), selo amarelo do título centrado na emenda (y=608) **só nos primeiros 3,5 s** (gancho; some com fade), legenda Arial Bold de 90 px palavra por palavra em **y=1300** (68% da altura, acima da descrição e dos botões que o TikTok e o Instagram põem no rodapé) e **sem barra de progresso** (as plataformas já têm a delas). O fade **já está implementado** nos dois renderizadores. `cortar.py` lê esse arquivo como padrão; mude a tela ali, não no código.
 
 **Câmera inteira:** a facecam usa a caixa completa da webcam. Quando a detecção pega só um pedaço (ou pega parte do jogo), `cortar.py` usa a caixa dominante da hora somada às horas anteriores, guardada em `lives/<id>/camera-live.json`. Se mesmo assim um corte sair errado, refaça com `--so NN --camera x,y,l,a`.
 
@@ -214,9 +214,9 @@ python "$SKILL/ferramentas/esqueleto.py"                                        
 python "$SKILL/ferramentas/esqueleto.py" --quadro "lives/<id>/hora-N/trechos/01-quadro.jpg"   # sobre um quadro real (usa camera.json)
 ```
 
-## Encerramento (últimos 5 segundos)
+## Encerramento (últimos 2,5 segundos)
 
-Todo short termina com o card `referencias/encerramento-ao-vivo.png` ("Venha assistir ao vivo" + Twitch/Kick/YouTube), igual a `referencias/encerramento-exemplo.png`: nos últimos 5 s o vídeo desfoca e escurece levemente, o card entra com fade + zoom leve (85% → 100%, ease-out em 0,6 s), título e legenda somem, e o vídeo e o áudio terminam com fade out de 0,6 s. O som do corte continua por baixo do card. Em cortes curtos o encerramento usa no máximo 40% da duração. Ajuste em `referencias/esqueleto-tela.json` → `encerramento`, ou por live no `estilo.json` (`"encerramento": false` desliga; `{"segundos": 4}` muda só essa chave). Para trocar a arte, substitua o PNG (fundo transparente).
+Todo short termina com o card `referencias/encerramento-ao-vivo.png` ("Venha assistir ao vivo" + Twitch/Kick/YouTube), igual a `referencias/encerramento-exemplo.png`: nos últimos **2,5 s** (era 5 s: num short de 25–45 s, 5 s de tela desfocada é 1/5 do vídeo sem conteúdo e atrapalha o replay automático) o vídeo desfoca e escurece levemente, o card entra com fade + zoom leve (85% → 100%, ease-out em 0,4 s), título e legenda somem, e o vídeo e o áudio terminam com fade out de 0,6 s. O som do corte continua por baixo do card. Em cortes curtos o encerramento usa no máximo 40% da duração. Ajuste em `referencias/esqueleto-tela.json` → `encerramento`, ou por live no `estilo.json` (`"encerramento": false` desliga; `{"segundos": 4}` muda só essa chave). Para trocar a arte, substitua o PNG (fundo transparente).
 
 ## Alterar o estilo
 

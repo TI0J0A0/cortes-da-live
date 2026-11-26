@@ -78,6 +78,7 @@ ESTILO = {
     "qualidade_amf": 45,             # AMD (QVBR): MAIOR = melhor, 1 a 51
     "qualidade_gpu": 18,             # NVIDIA (cq) / Intel (global_quality): MENOR = melhor
     "titulo_desloca": 0,             # px do centro do título em relação à emenda câmera/gameplay
+    "titulo_segundos": 0,            # o selo do título aparece só nos primeiros N s e some com fade (0 = o vídeo inteiro)
     "altura_barra": 12,
     "cor_barra": "#FFD60A",
     # card final "Venha assistir ao vivo" (referencias/esqueleto-tela.json -> encerramento); false desliga
@@ -108,6 +109,9 @@ def carregar_esqueleto(caminho=ESQUELETO):
         "cor_destaque": leg.get("cor_destaque") or tit.get("cor_fundo"),
         "tamanho_legenda": leg.get("tamanho_fonte"),
         "palavras_por_legenda": leg.get("palavras"),
+        "letras_por_legenda": leg.get("letras"),
+        "titulo_segundos": tit.get("segundos"),
+        "barra": barra.get("ativa"),
         "altura_legenda": (leg["centro_y"] / alto) if "centro_y" in leg else None,
         "cor_legenda": leg.get("cor"),
         "cor_contorno": leg.get("cor_contorno"),
@@ -798,6 +802,8 @@ def montar(trecho, t0, dur, pls, grupos, titulo, estilo, saida, folha, coment=No
     total = n_abre + n_corte + n_fecha
     fim_card = encerramento(estilo, total / float(FPS))  # o card final vale para o fim do vídeo inteiro
     k_card = int(round(fim_card["inicio"] * FPS)) if fim_card else total + 1
+    seg_titulo = float(estilo.get("titulo_segundos") or 0)
+    k_titulo = min(k_card, int(round(seg_titulo * FPS))) if seg_titulo > 0 else k_card  # o selo some antes do fim
     k_saida = total - int(round(fim_card["fade_saida"] * FPS)) if fim_card else total + 1
     # the sound: [the opening comment] + the cut + [the closing comment], each brought to the same loudness, then joined
     entradas, filtros, juntar = [], [], []
@@ -894,8 +900,8 @@ def montar(trecho, t0, dur, pls, grupos, titulo, estilo, saida, folha, coment=No
                 legenda(tela, coment["abre"]["grupos"], k / float(FPS), estilo_meu, "a")
             elif k < k_card:
                 legenda(tela, coment["fecha"]["grupos"], (k - n_abre - n_corte) / float(FPS), estilo_meu, "f")
-        if img_titulo is not None and k < k_card:
-            colar(tela, img_titulo, L / 2, rc["emenda"])
+        if img_titulo is not None and k < k_titulo:
+            colar(tela, img_titulo, L / 2, rc["emenda"], opacidade=min(1.0, (k_titulo - k) / (0.3 * FPS)))
         if k >= k_card:
             tela = aplicar_encerramento(tela, (k - k_card) / float(FPS), fim_card)
         if k >= k_saida:
@@ -1015,8 +1021,12 @@ def montar_rapido(trecho, t0, dur, pls, grupos, titulo, estilo, saida, folha):
             titulo_png = pasta_tmp / "titulo.png"
             Image.fromarray(imagem_do_titulo(titulo, estilo), mode="RGBA").save(titulo_png)
             entradas += ["-loop", "1", "-framerate", str(FPS), "-i", "titulo.png"]
-            so_antes = (":enable='lt(t\\,%.3f)'" % fim_card["inicio"]) if fim_card else ""
-            partes.append("[legendado][%d:v]overlay=(W-w)/2:%d-h/2:shortest=1%s[titulado]" % (n_entrada, rc["emenda"], so_antes))
+            seg_titulo = float(estilo.get("titulo_segundos") or 0)
+            ate = min([x for x in (fim_card["inicio"] if fim_card else None, seg_titulo if seg_titulo > 0 else None) if x] or [0])
+            so_antes = (":enable='lt(t\\,%.3f)'" % ate) if ate else ""
+            # o selo some com fade de 0,3 s (só no começo do short, como gancho)
+            partes.append("[%d:v]format=rgba%s[tit]" % (n_entrada, (",fade=t=out:st=%.3f:d=0.3:alpha=1" % max(0.0, ate - 0.3)) if ate else ""))
+            partes.append("[legendado][tit]overlay=(W-w)/2:%d-h/2:shortest=1%s[titulado]" % (rc["emenda"], so_antes))
             n_entrada += 1
             ultimo = "[titulado]"
         if fim_card:
@@ -1097,21 +1107,29 @@ ALERTA_JOGO = 0.5  # fração da fala do corte que é diálogo do jogo a partir 
 
 
 def trechos_de_fala(frases, ini, fim):
-    """[(s, e)] de cada frase da transcrição dentro do corte, em segundos desde o começo do corte."""
-    return [(round(max(f["s"], ini) - ini, 2), round(min(f["e"], fim) - ini, 2))
+    """[(s, e, texto)] de cada frase da transcrição dentro do corte, em segundos desde o começo do corte."""
+    return [(round(max(f["s"], ini) - ini, 2), round(min(f["e"], fim) - ini, 2), f.get("t", ""))
             for f in frases if f["e"] > ini and f["s"] < fim and min(f["e"], fim) - max(f["s"], ini) > 0.05]
 
 
 def falas_do_jogo(trechos, som, t0, lingua, detector=None):
     """Quais trechos de fala do corte NÃO são do streamer: diálogo de personagem, cinemática, rádio do jogo.
-    Mede o idioma de cada frase no áudio; o streamer fala `lingua` (português) e o jogo fala outra (inglês).
-    trechos: [(s, e)] desde o começo do corte; som: áudio do trecho baixado (16 kHz), onde o corte começa em t0.
+    trechos: [(s, e)] ou [(s, e, texto)] desde o começo do corte; som: áudio do trecho baixado (16 kHz), onde o corte
+    começa em t0. Uma frase é do jogo quando:
+      - o texto está em inglês (o turbo escreve a fala do jogo em inglês); ou
+      - o áudio é de outro idioma (prob >= 0.5) E o texto não tem nenhuma gíria do streamer ("mano", "caraca"...).
+    Frase com gíria nunca sai pelo áudio: um alarme ou um NPC falando por baixo confunde a medição do idioma.
     Devolve [(s, e, idioma)] dos trechos do jogo."""
     detector = detector or comum.lingua_da_fala
     lingua = (lingua or "pt")[:2]
     jogo = []
-    for s, e in trechos:
-        if e - s < 0.8:  # curto demais para medir o idioma com segurança: fica (na dúvida, é do streamer)
+    for item in trechos:
+        s, e = item[0], item[1]
+        texto = item[2] if len(item) > 2 else ""
+        if texto and comum.parece_fala_do_jogo(texto):
+            jogo.append((s, e, "en"))
+            continue
+        if e - s < 0.8 or (texto and comum.tem_giria(texto)):  # curto demais ou com marca do streamer: fica
             continue
         a, b = int((t0 + s) * comum.TAXA), int((t0 + e) * comum.TAXA)
         idioma, prob = detector(som[max(0, a):max(0, b)])
@@ -1129,7 +1147,7 @@ def sem_falas_do_jogo(palavras, jogo):
 
 def resumo_jogo(trechos, jogo):
     """(fração da fala que é do jogo, idiomas) para o aviso e o ALERTA."""
-    total = sum(e - s for s, e in trechos) or 1.0
+    total = sum(t[1] - t[0] for t in trechos) or 1.0
     return sum(e - s for s, e, _ in jogo) / total, sorted({i for _, _, i in jogo})
 
 
@@ -1280,11 +1298,6 @@ def main():
         # REGRA: a legenda é só da fala do streamer. Diálogo de personagem/cinemática do jogo sai da legenda.
         falas = trechos_de_fala(frases_live, m["inicio_s"], m["fim_s"])
         jogo = [] if (a.legenda_tudo or info.get("faixa_voz") is not None) else falas_do_jogo(falas, som, t0, lingua)
-        if not a.legenda_tudo and info.get("faixa_voz") is None:  # reforço pelo texto: frase escrita em inglês é do jogo
-            ja = {(s, e) for s, e, _ in jogo}
-            jogo += [(s, e, "en") for (s, e), f in zip(falas, [f for f in frases_live if f["e"] > m["inicio_s"] and f["s"] < m["fim_s"]
-                                                              and min(f["e"], m["fim_s"]) - max(f["s"], m["inicio_s"]) > 0.05])
-                     if (s, e) not in ja and comum.parece_fala_do_jogo(f["t"])]
         fracao, idiomas = resumo_jogo(falas, jogo)
         if jogo:
             print("    legenda: %d frase(s) do jogo (%s) fora da legenda, %.0f%% da fala do corte"
@@ -1331,7 +1344,7 @@ def main():
             palavras = juntar_numeros([w for s in segs for w in s.get("p", [])])
             reserva = palavras_da_transcricao(frases_live, m["inicio_s"], m["fim_s"])
             if not a.legenda_tudo and info.get("faixa_voz") is None:  # as frases desta transcrição são outras: mede de novo
-                p["jogo"] = falas_do_jogo([(s["s"], s["e"]) for s in segs], p["som"], p["t0"], lingua)
+                p["jogo"] = falas_do_jogo([(s["s"], s["e"], s["t"]) for s in segs], p["som"], p["t0"], lingua)
         if len(reserva) >= 8 and len(palavras) < 0.4 * len(reserva):
             # o Whisper do trecho perdeu a fala (às vezes só pega o NPC): usa a transcrição da hora,
             # com as palavras distribuídas dentro do tempo de cada frase

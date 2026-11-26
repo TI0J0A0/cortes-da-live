@@ -101,10 +101,10 @@ class TestRegrasNovas(unittest.TestCase):
         estilo = dict(cortar.ESTILO)
         enc = cortar.encerramento(estilo, 60)
         self.assertIsNotNone(enc)
-        self.assertAlmostEqual(enc['seg'], 5.0)
-        self.assertAlmostEqual(enc['inicio'], 55.0)
-        curto = cortar.encerramento(estilo, 10)
-        self.assertAlmostEqual(curto['seg'], 4.0)  # no máximo 40% do corte
+        self.assertAlmostEqual(enc['seg'], 2.5)
+        self.assertAlmostEqual(enc['inicio'], 57.5)
+        curto = cortar.encerramento(estilo, 5)
+        self.assertAlmostEqual(curto['seg'], 2.0)  # no máximo 40% do corte
         self.assertIsNone(cortar.encerramento(dict(estilo, encerramento={'ativo': False}), 60))
 
     def test_camera_inteira_dominante(self):
@@ -132,10 +132,16 @@ class TestRegrasNovas(unittest.TestCase):
                              ["01-a-v2-conferir.jpg", "01-a-v2.mp4", "01-a-v2.txt", "cortes.json"])
             self.assertTrue((dest / "01-a.mp4").exists())
 
+    def test_estilo_novo(self):
+        self.assertEqual(cortar.ESTILO['tamanho_legenda'], 90)
+        self.assertEqual(cortar.ESTILO['titulo_segundos'], 3.5)  # selo só no começo
+        self.assertFalse(cortar.ESTILO['barra'])  # sem barra de progresso
+        self.assertAlmostEqual(cortar.encerramento(dict(cortar.ESTILO), 30)['seg'], 2.5)
+
     def test_esqueleto_carregado(self):
         self.assertEqual(cortar.ESTILO['altura_painel_camera'], 608)  # 16:9 como a webcam 1280x720
         self.assertEqual(cortar.ESTILO['fade_camera'], 90)
-        self.assertAlmostEqual(cortar.ESTILO['altura_legenda'], 1574 / 1920.0)
+        self.assertAlmostEqual(cortar.ESTILO['altura_legenda'], 1300 / 1920.0)
 
 
 class TestMelhorias(unittest.TestCase):
@@ -330,7 +336,16 @@ class TestLegendaSoDoStreamer(unittest.TestCase):
 
     def test_trechos_de_fala_relativos_ao_corte(self):
         frases = [{'s': 98, 'e': 101, 't': 'a'}, {'s': 103, 'e': 120, 't': 'b'}, {'s': 130, 'e': 131, 't': 'fora'}]
-        self.assertEqual(cortar.trechos_de_fala(frases, 100.0, 110.0), [(0.0, 1.0), (3.0, 10.0)])
+        self.assertEqual(cortar.trechos_de_fala(frases, 100.0, 110.0), [(0.0, 1.0, 'a'), (3.0, 10.0, 'b')])
+
+    def test_giria_do_streamer_nunca_sai_pelo_audio(self):
+        som = np.zeros(comum.TAXA * 3, np.int16)
+        en = lambda a: ('en', 0.95)  # alarme/NPC por baixo confundindo a medição
+        self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0, 'E olha o ETzinho, mano.')], som, 0.0, 'pt', detector=en), [])
+        self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0, 'Você tem alguma ideia do que fazer?')], som, 0.0, 'pt', detector=en),
+                         [(0.0, 3.0, 'en')])  # traduzida pelo Whisper, sem gíria: sai
+        self.assertEqual(cortar.falas_do_jogo([(0.0, 3.0, 'This is scary, you guys')], som, 0.0, 'pt', detector=lambda a: ('pt', 0.9)),
+                         [(0.0, 3.0, 'en')])  # texto em inglês: sai mesmo se o áudio enganar
 
     def test_mesmo_idioma_nunca_sai(self):
         som = np.zeros(comum.TAXA * 3, np.int16)

@@ -111,3 +111,12 @@ Não foram fornecidos os VODs/gravações originais da live. Logo, não foi poss
 - **Enquadramento por momento:** `"enquadrar": "direita" | "esquerda" | "centro" | 0..1` no `momentos.json` desloca o corte da gameplay só naquele short (ex.: o celular do GTA na borda direita).
 - **Relatório semanal:** tarefa agendada `relatorio-semanal-shorts` (segundas, 9h) puxa as métricas do Metricool, roda o `desempenho.py` e atualiza o `como-escolher.md` quando houver conclusão nova.
 - 28 testes passando.
+
+## 2026-11-26 — Estilo novo dos shorts
+
+- **Card final de 2,5 s** (era 5 s): num short de 25–45 s, 5 s de tela desfocada é quase 1/5 do vídeo sem conteúdo e atrapalha o replay automático. Entrada do card em 0,4 s.
+- **Legenda mais alta e maior:** y=1300 (68% da altura; era 1574 = 82%, embaixo da descrição e dos botões do TikTok/Instagram), 90 px (era 76), até 16 letras por bloco para caber numa linha.
+- **Título só no começo:** o selo amarelo aparece nos primeiros 3,5 s, como gancho, e some com fade (`titulo.segundos` no `esqueleto-tela.json`; 0 = o vídeo inteiro). Nos dois renderizadores.
+- **Sem barra de progresso** (`barra.ativa: false`): as plataformas já mostram a delas.
+- **Filtro da legenda mais seguro:** frase com gíria do streamer ("mano", "caraca", "véi", "né"...) nunca sai pela medição de idioma do áudio (um alarme ou NPC falando por baixo marcou "E olha o ETzinho, mano." como jogo no teste). Sai quando o texto está em inglês, ou quando o áudio é de outro idioma e a frase não tem marca do streamer.
+- Testado num trecho real (cena do ET, live v2938905930) nos dois renderizadores. 30 testes passando.

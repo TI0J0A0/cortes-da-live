@@ -1,6 +1,9 @@
 {
   "_sobre": "Esqueleto da tela padrão dos Shorts (referencias/layout-esperado.webp). Medidas em px num vídeo 1080x1920. cortar.py lê este arquivo como padrão; estilo.json da live ainda pode sobrescrever cada valor.",
-  "tela": {"largura": 1080, "altura": 1920},
+  "tela": {
+    "largura": 1080,
+    "altura": 1920
+  },
   "camera": {
     "_sobre": "Facecam em largura total no topo, crop proporcional em volta do rosto (sem esticar).",
     "_proporcao": "Mesma proporção da webcam do OBS (1280x720 = 16:9). Com 'proporcao' definida, a altura é calculada: 1080 / 16 * 9 = 608. A câmera entra inteira, sem cortar as laterais (menos ampliação = mais nitidez).",
@@ -23,33 +26,40 @@
     "max_linhas": 2,
     "margem_lateral": 100,
     "cor_fundo": "#FFD60A",
-    "cor_texto": "#111111"
+    "cor_texto": "#111111",
+    "segundos": 3.5,
+    "_tempo": "O selo aparece só nos primeiros 3,5 s, como gancho, e some com fade (0 = o vídeo inteiro)."
   },
   "legenda": {
     "_sobre": "Palavra por palavra, 3 palavras por vez, branca com a palavra falada em amarelo e contorno preto.",
-    "centro_y": 1574,
-    "tamanho_fonte": 76,
+    "centro_y": 1300,
+    "tamanho_fonte": 90,
     "palavras": 3,
     "cor": "#FFFFFF",
     "cor_destaque": "#FFD60A",
-    "cor_contorno": "#000000"
+    "cor_contorno": "#000000",
+    "letras": 16,
+    "_posicao": "y=1300 (68% da altura): acima da descrição e dos botões que o TikTok e o Instagram põem no rodapé (era 1574 = 82%). 90 px (era 76) e até 16 letras por bloco para caber numa linha."
   },
   "encerramento": {
     "_sobre": "Nos últimos segundos: o vídeo desfoca, o card 'Venha assistir ao vivo' entra com fade + zoom leve, e tudo termina com fade out (referencias/encerramento-exemplo.png). Título e legenda somem durante o encerramento.",
     "ativo": true,
     "imagem": "encerramento-ao-vivo.png",
-    "segundos": 5,
+    "segundos": 2.5,
     "largura": 810,
     "centro_y": 975,
     "blur": 18,
     "escurecer": 0.85,
-    "entrada": 0.6,
+    "entrada": 0.4,
     "zoom_de": 0.85,
-    "fade_saida": 0.6
+    "fade_saida": 0.6,
+    "_curto": "2,5 s (era 5 s): num short de 25–45 s, 5 s de tela desfocada é 1/5 do vídeo sem conteúdo e atrapalha o replay automático."
   },
   "barra": {
     "_sobre": "Barra de progresso fina no rodapé.",
     "altura": 12,
-    "cor": "#FFD60A"
+    "cor": "#FFD60A",
+    "ativa": false,
+    "_desligada": "Desligada: TikTok, Instagram e YouTube já mostram a própria barra, e a nossa fica escondida embaixo da interface deles."
   }
 }

@@ -126,6 +126,16 @@ def parece_fala_do_jogo(texto, minimo=3, fracao=0.4):
     return sum(p in INGLES for p in palavras) / float(len(palavras)) >= fracao
 
 
+# Marcas de fala espontânea em português (gíria, interjeição): o jogo, mesmo traduzido pelo Whisper, não fala assim.
+GIRIAS = set("""mano manos caraca véi vei velho né tá tô pô po nossa gente cara bagulho maluco rapaziada vamo bora eita
+oxe uai irmão kkk kkkk porra caralho mds poxa putz égua olha tipo""".split())
+
+
+def tem_giria(texto):
+    """True quando a frase tem marca de fala do streamer em português (\"mano\", \"caraca\", \"véi\", \"né\"...)."""
+    return any(p in GIRIAS for p in re.findall(r"[\wáéíóúâêôãõç]+", str(texto or "").lower()))
+
+
 def ler_json(p, padrao=None):
     p = Path(p)
     if not p.exists():
