@@ -66,6 +66,32 @@ def ffmpeg():
         sys.exit("ffmpeg não encontrado. Rode de novo o preparar.py.")
 
 
+def twitch_downloader():
+    """O TwitchDownloaderCLI (github.com/lay295/TwitchDownloader), se a pessoa instalou: no PATH ou em ~/.cortes-de-live."""
+    for nome in ("TwitchDownloaderCLI", "TwitchDownloaderCLI.exe"):
+        achado = shutil.which(nome) or (str(CASA / nome) if (CASA / nome).is_file() else None)
+        if achado:
+            return achado
+    return None
+
+
+def qualidades_twitch(link):
+    """Todas as qualidades de um VOD da Twitch, da maior para a menor: [("1440p60", 1440), ("720p60", 720), ...].
+    Pelo TwitchDownloaderCLI, porque o yt-dlp não enxerga o 1440p (live v2940902491: listava até 720p60).
+    Lista vazia quando não é Twitch ou não deu para ler."""
+    m = re.search(r"twitch\.tv/videos/(\d+)", link or "")
+    exe = twitch_downloader()
+    if not m or not exe:
+        return []
+    try:
+        r = subprocess.run([exe, "info", "--id", m.group(1)], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    achadas = re.findall(r"(\d{3,4}p\d*)\s*│\s*\d+x(\d+)", r.stdout or "")
+    return sorted({(nome, int(alt)) for nome, alt in achadas}, key=lambda q: -q[1])
+
+
 def ytdlp(*args, cookies="", captura=True, tempo=None):
     """Call yt-dlp from this environment. Returns the finished process."""
     cmd = [sys.executable, "-m", "yt_dlp", "--no-warnings", "--ffmpeg-location", ffmpeg()]

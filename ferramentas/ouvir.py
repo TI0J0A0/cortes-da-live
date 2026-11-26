@@ -116,12 +116,7 @@ def _baixar_audio(info, destino, cookies):
 
 
 def twitch_downloader():
-    """O TwitchDownloaderCLI (github.com/lay295/TwitchDownloader), se a pessoa instalou: no PATH ou em ~/.cortes-de-live."""
-    for nome in ("TwitchDownloaderCLI", "TwitchDownloaderCLI.exe"):
-        achado = shutil.which(nome) or (str(comum.CASA / nome) if (comum.CASA / nome).is_file() else None)
-        if achado:
-            return achado
-    return None
+    return comum.twitch_downloader()
 
 
 def tem_chat(destino):

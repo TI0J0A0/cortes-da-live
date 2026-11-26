@@ -231,16 +231,57 @@ def nome_de_arquivo(t):
 
 # ---------- the piece of the stream ----------
 
-def baixar_trecho(info, pasta, n, ini, fim, cookies, max_altura=2160):
-    """Copia trechos na qualidade original. NÃO força keyframes: isso recodificava e degradava o vídeo."""
+def altura_do_video(arq):
+    cap = cv2.VideoCapture(para_cv(arq))
+    alt = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    cap.release()
+    return alt
+
+
+def baixar_pelo_twitch_downloader(link, destino, qualidade, a, b, pasta):
+    """Trecho de um VOD da Twitch numa qualidade pelo nome ('1440p60'). False quando a Twitch recusa (ex.: 403)."""
+    exe = comum.twitch_downloader()
+    m = re.search(r"twitch\.tv/videos/(\d+)", link or "")
+    if not exe or not m:
+        return False
+    tmp = destino.with_name(destino.stem + "-td.mp4")
+    try:
+        r = subprocess.run([exe, "videodownload", "--id", m.group(1), "-q", qualidade, "-o", str(tmp),
+                            "-b", "%.3fs" % a, "-e", "%.3fs" % b, "--trim-mode", "Safe", "--collision", "Overwrite",
+                            "--ffmpeg-path", comum.ffmpeg(), "--temp-path", str(pasta)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+    except (OSError, subprocess.TimeoutExpired):
+        tmp.unlink(missing_ok=True)
+        return False
+    if r.returncode or not tmp.exists() or tmp.stat().st_size < 100000:
+        tmp.unlink(missing_ok=True)
+        return False
+    tmp.replace(destino)
+    return True
+
+
+def baixar_trecho(info, pasta, n, ini, fim, cookies, max_altura=2160, qualidades=None):
+    """Copia trechos na qualidade original. NÃO força keyframes: isso recodificava e degradava o vídeo.
+    `qualidades` (de comum.qualidades_twitch): quando o yt-dlp traz menos que a maior qualidade da live, tenta a maior
+    pelo TwitchDownloaderCLI. Devolve o arquivo; a altura que ele tem fica no NN-origem.json."""
     destino = pasta / ("%02d.mp4" % n)
     cache = pasta / ("%02d-origem.json" % n)
-    fonte = info.get("arquivo_local") or info["link"]
+    # video_link: a mesma live em outro site com qualidade melhor (ex.: YouTube em 1440p), com o deslocamento medido
+    link = info.get("video_link") or info.get("link")
+    desloca = float(info.get("desloca") or 0.0) if info.get("video_link") else 0.0
+    fonte = info.get("arquivo_local") or link
+    alvo = [] if info.get("video_link") else [q for q in (qualidades or []) if q[1] <= max_altura][:1]
     chave = {"origem": fonte, "inicio": round(ini, 2), "fim": round(fim, 2), "max_altura": max_altura}
+    if desloca:
+        chave["desloca"] = desloca
+    if alvo and not info.get("arquivo_local"):
+        chave["melhor_da_live"] = alvo[0][1]  # trechos baixados antes desta conferência são baixados de novo
     if info.get("arquivo_local"):
         stat = Path(info["arquivo_local"]).stat()
         chave.update({"tamanho_origem": stat.st_size, "modificado_ns": stat.st_mtime_ns})
-    if destino.exists() and destino.stat().st_size > 100000 and comum.ler_json(cache) == chave:
+    salvo = dict(comum.ler_json(cache, {}) or {})
+    salvo.pop("altura", None)
+    if destino.exists() and destino.stat().st_size > 100000 and salvo == chave:
         return destino
     destino.unlink(missing_ok=True)
     a, b = max(0.0, ini - MARGEM), fim + MARGEM
@@ -254,9 +295,15 @@ def baixar_trecho(info, pasta, n, ini, fim, cookies, max_altura=2160):
         fmt = ("bv*[height<=%d]+ba/bv*[height<=%d]/b" % (max_altura, max_altura))
         r = comum.ytdlp("-f", fmt, "-S", "res,fps,vbr,abr", "--download-sections", "*%.3f-%.3f" % (a, b),
                         "--merge-output-format", "mp4", "-o", str(pasta / ("%02d.%%(ext)s" % n)),
-                        info["link"], cookies=cookies)
+                        link, cookies=cookies) if not desloca else comum.ytdlp(
+            "-f", fmt, "-S", "res,fps,vbr,abr", "--download-sections", "*%.3f-%.3f" % (a + desloca, b + desloca),
+            "--merge-output-format", "mp4", "-o", str(pasta / ("%02d.%%(ext)s" % n)), link, cookies=cookies)
     if r.returncode or not destino.exists() or destino.stat().st_size < 100000:
         sys.exit("Não consegui obter o trecho %d:\n%s" % (n, (r.stderr or "")[-1200:]))
+    if alvo and not info.get("arquivo_local") and altura_do_video(destino) < alvo[0][1]:
+        if baixar_pelo_twitch_downloader(info["link"], destino, alvo[0][0], a, b, pasta):
+            print("    trecho em %s pelo TwitchDownloader (o yt-dlp só trazia menos)" % alvo[0][0], flush=True)
+    chave["altura"] = altura_do_video(destino)
     comum.escrever_json(cache, chave)
     return destino
 
@@ -287,6 +334,42 @@ def alinhar(trecho, audio_da_live, pedido):
     if certeza < 6:
         return pedido, som, certeza
     return base + k / 100.0, som, certeza
+
+
+def medir_deslocamento(link, audio_da_live, pasta, total, cookies=""):
+    """A mesma live em outro site (ex.: YouTube em 1440p quando a Twitch só libera 720p) começa em outro momento.
+    Mede pelo som em dois pontos da live: tempo_no_link = tempo_da_live + desloca. Guardado em fonte-video.json.
+    Sai do programa se o som não bater (não é a mesma live)."""
+    raiz = pasta.parent if pasta.name.startswith("hora-") else pasta
+    cache = raiz / "fonte-video.json"
+    salvo = comum.ler_json(cache, {}) or {}
+    if salvo.get("link") == link and "desloca" in salvo:
+        return salvo["desloca"]
+    medidas = []
+    with tempfile.TemporaryDirectory() as td:
+        for frac in (0.25, 0.75):
+            t = int(total * frac)
+            arq = Path(td) / ("ponto-%d.m4a" % t)
+            # corte exato (recodifica, mas é só o áudio): sem isso o pedaço começa no segmento anterior e a medida erra
+            comum.ytdlp("-f", "ba/b", "--download-sections", "*%d-%d" % (t, t + 40), "--force-keyframes-at-cuts",
+                        "-o", str(arq), link, cookies=cookies)
+            if not arq.exists():
+                continue
+            a = envelope(comum.audio(arq))
+            de = max(0.0, t - 1200.0)
+            b = envelope(comum.audio(audio_da_live, inicio=de, duracao=2440))
+            if len(b) <= len(a) or len(a) < 500:
+                continue
+            c = cv2.matchTemplate(b.reshape(1, -1).astype(np.float32), a.reshape(1, -1).astype(np.float32),
+                                  cv2.TM_CCOEFF_NORMED).ravel()
+            k = int(np.argmax(c))
+            if c[k] >= 0.8:
+                medidas.append(t - (de + k / 100.0))  # link - live
+    if len(medidas) < 2 or abs(medidas[0] - medidas[1]) > 0.5:
+        sys.exit("O som de %s não bate com o da live (medidas: %s). É a mesma live?" % (link, medidas))
+    desloca = round(sum(medidas) / 2, 2)
+    comum.escrever_json(cache, {"link": link, "desloca": desloca, "medidas": medidas})
+    return desloca
 
 
 # ---------- the streamer's camera ----------
@@ -387,13 +470,77 @@ def rosto_parado(quadros, achados):
 
 def linhas_paradas(quadros):
     """Edges that are in the same place in every frame: the borders of what the streamer put over the game."""
-    soma_v = soma_h = None
+    vs, hs = [], []
     for q in quadros:
         c = cv2.cvtColor(q, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        gv, gh = np.abs(cv2.Sobel(c, cv2.CV_32F, 1, 0, ksize=3)), np.abs(cv2.Sobel(c, cv2.CV_32F, 0, 1, ksize=3))
-        soma_v = gv if soma_v is None else np.minimum(soma_v, gv)  # the minimum over time keeps only what never moves
-        soma_h = gh if soma_h is None else np.minimum(soma_h, gh)
-    return soma_v, soma_h
+        vs.append(np.abs(cv2.Sobel(c, cv2.CV_32F, 1, 0, ksize=3)))
+        hs.append(np.abs(cv2.Sobel(c, cv2.CV_32F, 0, 1, ksize=3)))
+    if len(vs) < 4:
+        return np.min(vs, axis=0), np.min(hs, axis=0)
+    # a low percentile over time keeps only what is there in most looks. The plain minimum lost the webcam's border
+    # whenever one look of the game was dark right behind it (night scenes)
+    return np.percentile(vs, 25, axis=0).astype(np.float32), np.percentile(hs, 25, axis=0).astype(np.float32)
+
+
+def picos(serie, de, ate, piso, n=5):
+    """Os n pontos mais fortes de `serie` entre de e ate (acima do piso), sem dois a menos de 4 px um do outro."""
+    de, ate = int(max(0, min(de, ate))), int(min(len(serie), max(de, ate)))
+    achados = []
+    for k in (de + np.argsort(serie[de:ate])[::-1]):
+        if serie[k] < piso or len(achados) >= n:
+            break
+        if all(abs(int(k) - a) >= 4 for a in achados):
+            achados.append(int(k))
+    return achados
+
+
+def contorno_inteiro(bv, bh, rosto, col, lin, piso_c, piso_l):
+    """The webcam's border is a line that goes all the way round the box. The streamer's room never moves either, so the
+    edge of the bed or a wall is also a standing line, but it only crosses part of the box. Tries the strongest lines on
+    each side of the face and keeps the rectangle whose four sides are covered end to end. Returns (esq, topo, dir, base) or None."""
+    H, W = bv.shape
+    cx, cy, fw, fh = rosto
+    fv = cv2.dilate((bv >= piso_c).astype(np.uint8), np.ones((1, 3), np.uint8))  # aceita a linha 1 px pra cada lado
+    fh_ = cv2.dilate((bh >= piso_l).astype(np.uint8), np.ones((3, 1), np.uint8))
+    # candidates come from a wide strip around the face: right under the face the border hides behind a dark shirt
+    xa, xb = int(max(0, cx - 2.5 * fw)), int(min(W, cx + 2.5 * fw))
+    ya, yb = int(max(0, cy - 1.5 * fh)), int(min(H, cy + 1.5 * fh))
+    col = np.maximum(col, fv[ya:yb].mean(axis=0) * piso_c * 2)  # coverage share, on the same scale as the piso
+    lin = np.maximum(lin, fh_[:, xa:xb].mean(axis=1) * piso_l * 2)
+    # faixas largas: com o streamer perto da webcam o rosto ocupa quase a altura toda da caixa
+    esqs = picos(col, cx - 4.0 * fw, cx - 0.6 * fw, piso_c) + ([0] if cx - 2.4 * fw <= 0 else [])
+    dirs = picos(col, cx + 0.6 * fw, cx + 4.0 * fw, piso_c) + ([W] if cx + 2.4 * fw >= W else [])
+    topos = picos(lin, cy - 3.0 * fh, cy - 0.6 * fh, piso_l) + ([0] if cy - 1.6 * fh <= 0 else [])
+    bases = picos(lin, cy + 0.6 * fh, cy + 4.5 * fh, piso_l) + ([H] if cy + 2.6 * fh >= H else [])
+
+    def lado_v(k, t, b):  # fração da coluna k, de t a b, que é linha parada (a borda da tela conta como linha)
+        return 1.0 if k in (0, W) else float(fv[t:b, min(k, W - 1)].mean())
+
+    def lado_h(k, e, d):
+        return 1.0 if k in (0, H) else float(fh_[min(k, H - 1), e:d].mean())
+
+    melhor, nota_melhor = None, 0.0
+    for e in esqs:
+        for d in dirs:
+            if not 2.0 * fw <= d - e <= 8 * fw:
+                continue
+            for t in topos:
+                for b in bases:
+                    if not 1.6 * fh <= b - t <= 7 * fh:
+                        continue
+                    lados = (lado_v(e, t, b), lado_v(d, t, b), lado_h(t, e, d), lado_h(b, e, d))
+                    if min(lados) < 0.3:  # one side with no line along it: not a box
+                        continue
+                    cobre = sum(lados) / 4.0
+                    # desempate: webcams quase sempre são 16:9 ou 4:3
+                    prop = (d - e) / float(b - t)
+                    nota = cobre - 0.05 * min(abs(np.log(prop / (16 / 9.0))), abs(np.log(prop / (4 / 3.0))))
+                    if nota > nota_melhor:
+                        melhor, nota_melhor = (e, t, d, b), nota
+    if melhor is None or nota_melhor < 0.6:
+        return None
+    e, t, d, b = melhor
+    return (e + 2 if e else 0, t + 2 if t else 0, d - 2 if d < W else W, b - 2 if b < H else H)
 
 
 def caixa_da_camera(quadros, rosto):
@@ -420,6 +567,10 @@ def caixa_da_camera(quadros, rosto):
             return k if serie[k] >= piso else None
 
         piso_c, piso_l = max(12.0, 6 * float(np.median(col))), max(12.0, 6 * float(np.median(lin)))
+        melhor = contorno_inteiro(bv, bh, (cx, cy, fw, fh), col, lin, piso_c, piso_l)
+        if melhor is not None:
+            esq, topo, dir_, base = melhor
+            return [int(esq), int(topo), int(dir_ - esq), int(base - topo)]
         achou["esq"] = procura(col, cx - 4.0 * fw, cx - 0.8 * fw, piso_c)
         achou["dir"] = procura(col, cx + 0.8 * fw, cx + 4.0 * fw, piso_c)
         achou["topo"] = procura(lin, cy - 3.0 * fh, cy - 0.7 * fh, piso_l)
@@ -1224,6 +1375,10 @@ def main():
     ap.add_argument("--modo", default="", choices=["", "facecam", "cheia", "sem"])
     ap.add_argument("--layout", choices=["gamer", "classico"], default="", help="gamer prioriza gameplay e preserva a facecam")
     ap.add_argument("--fonte-max-altura", type=int, default=2160, help="resolução máxima da fonte remota (padrão: a melhor, até 4K)")
+    ap.add_argument("--video-link", default="", help="a mesma live em outro site com qualidade maior (ex.: o YouTube em "
+                    "1440p quando a Twitch só libera 720p). A diferença de tempo é medida pelo som e guardada")
+    ap.add_argument("--arquivo", default="", help="o vídeo inteiro da live num arquivo (gravação do OBS ou VOD baixado no "
+                    "painel da Twitch): os trechos saem dele, na qualidade original, em vez do link")
     ap.add_argument("--fps", type=int, choices=[30, 60], default=30, help="30 = rápido; 60 = mais fluidez")
     ap.add_argument("--whisper-trecho", action="store_true",
                     help="transcreve cada trecho de novo para a legenda (padrão: usa as palavras já gravadas pelo ouvir.py)")
@@ -1252,6 +1407,14 @@ def main():
         estilo["gpu"] = True
     if estilo.get("layout") not in ("gamer", "classico"):
         sys.exit("layout inválido: escolha gamer ou classico")
+    if a.arquivo:
+        if not Path(a.arquivo).is_file():
+            sys.exit("Não achei o arquivo: %s" % a.arquivo)
+        info["arquivo_local"] = str(Path(a.arquivo).resolve())
+    # REGRA: sempre a melhor qualidade. Descobre a maior resolução da live para conferir cada trecho contra ela
+    qualidades = [] if info.get("arquivo_local") else comum.qualidades_twitch(info.get("link", ""))
+    if qualidades:
+        print("maior qualidade da live: %s" % qualidades[0][0], flush=True)
     # na pasta da hora (hora-N/) o áudio fica na pasta da live, um nível acima
     fontes_audio = [p for d in (pasta, pasta.parent) for p in d.glob("audio.*") if p.suffix not in (".part", ".ytdl")]
     if info.get("arquivo_audio") and Path(info["arquivo_audio"]).exists():
@@ -1259,6 +1422,15 @@ def main():
     audio_da_live = Path(info["arquivo_local"]) if info.get("arquivo_local") else (fontes_audio[0] if fontes_audio else None)
     if audio_da_live is None or not audio_da_live.exists():
         sys.exit("Não achei o áudio da live. Rode ouvir.py primeiro.")
+    raiz_live = pasta.parent if pasta.name.startswith("hora-") else pasta
+    video_link = a.video_link or (comum.ler_json(raiz_live / "fonte-video.json", {}) or {}).get("link", "")
+    if video_link and not info.get("arquivo_local"):
+        # o vídeo vem do outro link; os tempos continuam os da live (transcrição, momentos, alinhamento pelo som)
+        total = float(info.get("duracao") or comum.ler_json(raiz_live / "info.json", {}).get("duracao") or 0)
+        info["video_link"] = video_link
+        info["desloca"] = medir_deslocamento(video_link, audio_da_live, pasta, total, a.cookies)
+        qualidades = []
+        print("vídeo de %s (%+.2f s em relação à live)" % (video_link, info["desloca"]), flush=True)
     transcricao = comum.ler_json(pasta / "transcricao.json")
     lingua = transcricao.get("lingua")
     frases_live = transcricao.get("frases", [])
@@ -1275,11 +1447,16 @@ def main():
     feitos = comum.ler_json(cortes / "cortes.json", [])
 
     # first pass: download, align and look for the camera in every clip, so clips of one stream can agree on it
-    prontos = []
+    prontos, abaixo = [], []
     for m in escolhidos:
         n = m["n"]
         print("momento %d: %s a %s (%s)" % (n, m["inicio"], m["fim"], m.get("titulo", "")), flush=True)
-        trecho = baixar_trecho(info, trechos, n, m["inicio_s"], m["fim_s"], a.cookies, a.fonte_max_altura)
+        trecho = baixar_trecho(info, trechos, n, m["inicio_s"], m["fim_s"], a.cookies, a.fonte_max_altura, qualidades)
+        alt = altura_do_video(trecho)
+        alvo = [q[1] for q in qualidades if q[1] <= a.fonte_max_altura][:1]
+        if alvo and alt < alvo[0]:
+            abaixo.append(n)
+            print("    ⚠️  QUALIDADE: trecho em %dp, mas a live tem %dp (a Twitch recusou a melhor)" % (alt, alvo[0]), flush=True)
         pedido = max(0.0, m["inicio_s"] - MARGEM)
         comeco, som, certeza = alinhar(trecho, audio_da_live, pedido)
         t0 = m["inicio_s"] - comeco
@@ -1329,6 +1506,7 @@ def main():
             print("  %s  %s%s" % (trechos / ("%02d-previa.jpg" % p["m"]["n"]), p["m"].get("titulo", ""),
                                   "   ⚠️ fala é mais do jogo que sua" if p["fracao_jogo"] >= ALERTA_JOGO else ""))
         print("Depois rode o cortar.py sem --previa (os trechos já baixados são reaproveitados).")
+        aviso_de_qualidade(abaixo, qualidades)
         return
     # second pass: the words and the clip
     for p in prontos:
@@ -1397,6 +1575,18 @@ def main():
     levou = tempos.termina()
     print("\n%d cortes em %s: %s" % (len(prontos), comum.duracao_falada(levou), cortes))
     print("Abra cada NN-...-conferir.jpg e veja: a câmera inteira em cima, o jogo embaixo, o título e a legenda legíveis.")
+    aviso_de_qualidade(abaixo, qualidades)
+
+
+def aviso_de_qualidade(abaixo, qualidades):
+    if not abaixo:
+        return
+    print("\n⚠️  QUALIDADE ABAIXO DA LIVE nos cortes %s: a live tem %s, mas a Twitch não liberou essa qualidade para "
+          "download. Para a melhor qualidade, refaça com a fonte original:\n"
+          "   --arquivo \"<vídeo da live>\"  (gravação do OBS, ou o VOD baixado em Painel do Criador > Conteúdo > "
+          "Produtor de vídeo > ⋮ > Baixar)\n"
+          "   ou --cookies <navegador> para baixar logado na Twitch."
+          % (", ".join(str(n) for n in abaixo), qualidades[0][0]), flush=True)
 
 
 if __name__ == "__main__":

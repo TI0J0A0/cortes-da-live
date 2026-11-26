@@ -85,14 +85,34 @@ def horarios_livres(tomados, de, ate, quantos):
 
 
 def subir(arquivo):
-    """Sobe o vídeo no litterbox (72 h) e devolve o link público."""
-    r = subprocess.run(["curl", "-s", "--max-time", "600", "-F", "reqtype=fileupload", "-F", "time=72h",
-                        "-F", "fileToUpload=@%s" % arquivo, "https://litterbox.catbox.moe/resources/internals/api.php"],
-                       capture_output=True, text=True)
-    link = (r.stdout or "").strip()
-    if not link.startswith("https://"):
-        sys.exit("Falhou o upload de %s: %s" % (arquivo, (r.stderr or link)[-300:]))
-    return link
+    """Sobe o vídeo num host temporário e devolve o link público.
+
+    Primeiro o litterbox (72 h); se ele falhar (fora do ar, 500/412), o uguu.se (3 h). O Metricool copia o vídeo
+    no momento do agendamento, então 3 h bastam. O curl recebe uma cópia com nome ASCII: o litterbox recusa
+    (412) nomes com acento."""
+    import shutil
+    import tempfile
+    tmp = Path(tempfile.gettempdir()) / ("short-%d.mp4" % abs(hash(str(arquivo))))
+    shutil.copyfile(arquivo, tmp)
+    try:
+        r = subprocess.run(["curl", "-s", "--max-time", "180", "-F", "reqtype=fileupload", "-F", "time=72h",
+                            "-F", "fileToUpload=@%s" % tmp, "https://litterbox.catbox.moe/resources/internals/api.php"],
+                           capture_output=True, text=True)
+        link = (r.stdout or "").strip()
+        if link.startswith("https://"):
+            return link
+        print("  litterbox falhou (%s); tentando uguu.se" % link[:60].replace("\n", " "))
+        r = subprocess.run(["curl", "-s", "--max-time", "600", "-F", "files[]=@%s" % tmp, "https://uguu.se/upload"],
+                           capture_output=True, text=True)
+        try:
+            link = json.loads(r.stdout)["files"][0]["url"]
+        except Exception:
+            link = ""
+        if not link.startswith("https://"):
+            sys.exit("Falhou o upload de %s: %s" % (arquivo, (r.stderr or r.stdout)[-300:]))
+        return link
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def metadados(pasta_entrega, arquivo):

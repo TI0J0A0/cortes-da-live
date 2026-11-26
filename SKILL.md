@@ -21,7 +21,7 @@ description: >
 1. **Cerca de 10 cortes por hora de live.** Meta de 10 por hora (aceitável de 8 a 12). Uma live de 5 h rende ~50 shorts. **Nunca invente cortes fracos para bater a meta:** se uma hora só tiver 6 momentos bons, entregue 6 e diga por quê.
 2. **⚠️ LEGENDA SÓ COM A FALA DO STREAMER.** Diálogo de personagem, cinemática, rádio e NPC do jogo **nunca** entram na legenda, nem no "O QUE É DITO" do `.txt`. O `cortar.py` mede o idioma de cada frase no áudio e tira da legenda o que não é português, porque o jogo fala inglês e o Whisper com língua fixa em português *traduz* essa fala e ela vazaria como se fosse sua. Quando mais da metade da fala de um corte é do jogo, ele mostra **⚠️ ALERTA** (na prévia e no render): nesse caso, confira se o momento se sustenta só com a sua reação ou troque o momento. Na revisão (seção 5), toda legenda que mostrar fala de personagem é defeito: refaça com `--so NN`.
 3. **Shorts curtos e com gancho.** Mire em **25 a 45 s**; o `conferir.py` avisa acima de 45 s e rejeita acima de 60 s. Comece no gatilho (a ação nos 2 primeiros segundos) e termine logo depois da reação.
-4. **Melhor qualidade possível.** Fonte original do OBS quando existir; senão, o link (o `cortar.py` baixa a melhor resolução até 4K, maior fps e maior bitrate). Render H.264 `crf 16`/`slow`, áudio 256 kbps. Nada de recomprimir trechos à toa.
+4. **⚠️ SEMPRE A MELHOR QUALIDADE.** Fonte original do OBS quando existir; senão, o link (o `cortar.py` baixa a melhor resolução até 4K, maior fps e maior bitrate). O `cortar.py` lista as qualidades da live pelo TwitchDownloaderCLI (o yt-dlp não enxerga o 1440p da Twitch) e mostra **⚠️ QUALIDADE** quando um trecho vem abaixo da maior. **Nunca entregue abaixo da qualidade da live sem resolver:** a Twitch costuma recusar o 1440p para download (403); se a live também foi para o **YouTube**, rode com `--video-link <link do YouTube>` (lá o 1440p baixa, e a diferença de tempo entre os dois é medida pelo som e guardada em `fonte-video.json`); senão, peça o VOD baixado no painel da Twitch ou a gravação do OBS (`--arquivo`). Render H.264 `crf 16`/`slow`, áudio 256 kbps. Nada de recomprimir trechos à toa.
 5. **Separado por hora.** Cada hora vira uma pasta própria: `lives/<id>/hora-1/`, `hora-2/`, `hora-3/`... (análise, cortes e entrega independentes).
 6. **Ordem: hora 1 → hora 2 → hora 3 → ...** Comece SEMPRE pela primeira hora.
 7. **Entregar enquanto processa a próxima.** Assim que a hora N estiver cortada e revisada, entregue (`entregar.py`) e avise o usuário com a lista dos shorts. Enquanto você analisa/corta a hora N, a transcrição das próximas horas já está rodando em segundo plano. O usuário recebe vídeos desde a primeira hora, sem esperar a live inteira.
@@ -102,6 +102,10 @@ Leia `momentos-conferidos.json` e os avisos. Não afirme que viu algo que ainda 
 ```bash
 python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --previa   # só trechos + trechos/NN-previa.jpg
 python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N"            # render
+# a mesma live no YouTube, com qualidade maior que a da Twitch (medido uma vez, depois vale para todas as horas):
+python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --video-link "https://youtube.com/live/..."
+# o vídeo inteiro num arquivo (gravação do OBS ou VOD baixado no painel da Twitch):
+python "$SKILL/ferramentas/cortar.py" "lives/<id>/hora-N" --arquivo "D:/gravacoes/live.mkv"
 ```
 
 O programa:

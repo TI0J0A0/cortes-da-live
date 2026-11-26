@@ -120,3 +120,20 @@ Não foram fornecidos os VODs/gravações originais da live. Logo, não foi poss
 - **Sem barra de progresso** (`barra.ativa: false`): as plataformas já mostram a delas.
 - **Filtro da legenda mais seguro:** frase com gíria do streamer ("mano", "caraca", "véi", "né"...) nunca sai pela medição de idioma do áudio (um alarme ou NPC falando por baixo marcou "E olha o ETzinho, mano." como jogo no teste). Sai quando o texto está em inglês, ou quando o áudio é de outro idioma e a frase não tem marca do streamer.
 - Testado num trecho real (cena do ET, live v2938905930) nos dois renderizadores. 30 testes passando.
+
+## 2026-11-26 — Câmera inteira no topo (borda da webcam)
+
+- **Problema:** na live v2940902491 a câmera saía com zoom e sem o topo (a cabeça encostando na borda). O `cortar.py` acha a borda da webcam pelas linhas que nunca se mexem, mas o quarto do streamer também não se mexe: a cabeceira da cama (y≈110) virou a "borda de cima", e a caixa começava ~33 px abaixo do topo real (75), cortando a cabeça e mostrando mais peito.
+- **Correção:** `contorno_inteiro` testa as linhas mais fortes de cada lado do rosto e fica com o retângulo cujos quatro lados têm linha de ponta a ponta (a cabeceira só cruza um pedaço da caixa). As linhas paradas agora usam o percentil 25 no tempo em vez do mínimo, porque um único quadro escuro do jogo atrás da borda apagava a webcam inteira (cenas de noite). A busca da base começa mais perto do rosto, porque com o streamer perto da câmera o rosto ocupa quase a altura toda da caixa.
+- Nos trechos reais da live, 19 de 20 acharam a caixa certa sozinhos; o que errou pegou uma caixa menor dentro da certa, e a junção da live (`caixa_dominante`) corrige. Na live anterior (1080p) continua certo.
+- **Observação:** se o `camera-live.json` de uma live guardou caixas erradas de horas anteriores, apague-o antes de refazer (ele é recriado).
+- **Qualidade da fonte:** essa live só existe em **720p60** na Twitch (a anterior tinha 1080p60 "Source"). Com a webcam ocupando ~300 px do vídeo, ela é ampliada ~3,6× para 1080 px (na anterior, ~2,4×). Nenhum ajuste no corte devolve esse detalhe: confira a resolução de saída do OBS/Twitch.
+- 31 testes passando.
+
+## 2026-11-26 — Regra: sempre a melhor qualidade (1440p pelo YouTube)
+
+- **Problema:** a live v2940902491 foi transmitida em 1440p60, mas os shorts saíram de trechos em 720p. A Twitch tem o 1440p, mas o yt-dlp não o lista e a Twitch recusa o download dele (403, pelo TwitchDownloader também). O projeto caía para 720p sem avisar; a webcam (~300 px) era ampliada 3,6×.
+- **Qualidade conferida:** `comum.qualidades_twitch` lista as qualidades do VOD pelo TwitchDownloaderCLI. O `cortar.py` mostra a maior, confere cada trecho contra ela, tenta a maior pelo TwitchDownloader quando o yt-dlp traz menos, e mostra **⚠️ QUALIDADE** no trecho e no fim (com o que fazer) quando não consegue.
+- **`--video-link`:** a mesma live em outro site (o YouTube baixa o 1440p normalmente). A diferença de tempo é medida pelo som em dois pontos da live (corte exato do áudio; as duas medidas precisam bater em 0,5 s), guardada em `lives/<id>/fonte-video.json` e usada sozinha nas próximas horas. Os tempos continuam os da live (transcrição, momentos, alinhamento).
+- **`--arquivo`:** o vídeo inteiro num arquivo (gravação do OBS ou VOD baixado no painel da Twitch).
+- Os 23 shorts da live v2940902491 foram refeitos a partir do YouTube em 1440p: webcam com ~595 px, ampliada 1,8×.

@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import comum  # noqa: E402
 
-MANTER = {"info.json", "pasta-entrega.txt", "entrega.json"}
+MANTER = {"info.json", "pasta-entrega.txt", "entrega.json", "fonte-video.json"}
 
 
 def tamanho(p):

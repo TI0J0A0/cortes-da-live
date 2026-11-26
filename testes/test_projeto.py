@@ -406,6 +406,39 @@ class TestMelhorias2(unittest.TestCase):
             self.assertEqual(sorted(p.suffix for p, _, _ in achados), ['.mp4', '.txt'])
             self.assertTrue(video.exists())  # listar não apaga
 
+    def test_caixa_da_camera_ignora_linha_parada_do_quarto(self):
+        # o quarto do streamer também não se mexe: a cabeceira da cama é uma linha parada dentro da webcam,
+        # mas só a borda da webcam dá a volta inteira na caixa (live v2940902491: o corte pegava y=107 em vez de 75)
+        rng = np.random.default_rng(3)
+        quadros = []
+        for i in range(10):
+            ruido = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
+            q = cortar.cv2.GaussianBlur(ruido, (0, 0), 6)               # jogo: suave, muda a cada quadro
+            q[75:245, 18:320] = 120                                    # a webcam
+            q[112:116, 200:320] = 230                                  # cabeceira da cama, parada
+            q[140:200, 150:200] = 60 + i                               # o rosto, vivo
+            quadros.append(q)
+        x, y, w, h = cortar.caixa_da_camera(quadros, (150.0, 140.0, 50.0, 60.0))
+        self.assertLessEqual(abs(y - 75), 4)
+        self.assertLessEqual(abs(x - 18), 4)
+        self.assertLessEqual(abs(x + w - 320), 4)
+        self.assertLessEqual(abs(y + h - 245), 4)
+
+    def test_qualidades_twitch_le_a_tabela_do_twitch_downloader(self):
+        saida = ("│ 1440p60    │ 2560x1440  │  60 │  avc1.640433,  │ 6099kbps │\n"
+                 "│ 720p60     │ 1280x720   │  60 │  avc1.4D4020,  │ 3526kbps │\n"
+                 "│ 160p30     │ 284x160    │  30 │  avc1.4D400C,  │  287kbps │\n")
+        velho_exe, velho_run = comum.twitch_downloader, comum.subprocess.run
+        comum.twitch_downloader = lambda: 'td'
+        comum.subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, saida, '')
+        try:
+            q = comum.qualidades_twitch('https://www.twitch.tv/videos/123')
+            self.assertEqual(q[0], ('1440p60', 1440))
+            self.assertEqual([h for _, h in q], [1440, 720, 160])
+            self.assertEqual(comum.qualidades_twitch('https://youtube.com/live/x'), [])
+        finally:
+            comum.twitch_downloader, comum.subprocess.run = velho_exe, velho_run
+
 
 if __name__ == '__main__':
     unittest.main()
